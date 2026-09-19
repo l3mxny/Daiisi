@@ -23,14 +23,26 @@ export interface FieldApiResponse {
   error?: string;
 }
 
+export type SoilType = "Clay" | "Loam" | "Sandy";
+
+export interface FieldDetails {
+  name: string;
+  crop: string;
+  plantedOn: string | null; // yyyy-mm-dd
+  soilType: SoilType | null;
+}
+
 // One user-selected plot on the map, tracked independently of the others so
-// each can load, fail, or refresh without touching its siblings.
+// each can load, fail, or refresh without touching its siblings. "draft"
+// means it's been drawn but not yet saved — no fetch has happened for it.
 export interface Plot {
   id: string;
   label: string;
   bbox: Bbox;
   color: string;
-  status: "loading" | "ready" | "error";
+  status: "draft" | "loading" | "ready" | "error";
+  saved: boolean;
+  details: FieldDetails;
   data: FieldApiResponse | null;
   previousData: FieldApiResponse | null; // last-known-good snapshot before the current refresh, for "since last check"
   error: string | null;

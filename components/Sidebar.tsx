@@ -53,24 +53,24 @@ export default function Sidebar({
   }, null);
 
   return (
-    <aside className="flex h-full w-56 shrink-0 flex-col justify-between bg-zinc-950 px-4 py-5">
+    <aside className="flex h-full w-60 shrink-0 flex-col justify-between bg-[#1c231d] px-4 py-6">
       <div className="flex flex-col gap-8">
-        <div className="flex items-center gap-2">
-          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-green-600 text-sm font-bold text-white">
+        <div className="flex items-center gap-2.5 px-1">
+          <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-green-600 text-sm font-bold text-white">
             F
           </span>
-          <span className="font-serif text-lg text-white">FarmOS</span>
+          <span className="font-serif text-lg text-zinc-50">FarmOS</span>
         </div>
 
-        <nav className="flex flex-col gap-1">
+        <nav className="flex flex-col gap-1.5">
           {TABS.map((tab) => {
             const active = tab.id === activeTab;
             return (
               <button
                 key={tab.id}
                 onClick={() => onTabChange(tab.id)}
-                className={`flex items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                  active ? "bg-green-800/90 text-white" : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                className={`flex items-center gap-2.5 rounded-full px-3.5 py-2.5 text-left text-sm font-medium transition-colors ${
+                  active ? "bg-green-700 text-white shadow-sm" : "text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
                 }`}
               >
                 <TabIcon id={tab.id} />
@@ -81,8 +81,8 @@ export default function Sidebar({
         </nav>
       </div>
 
-      <div className="rounded-md bg-zinc-900 px-3 py-2.5 text-xs">
-        <div className="font-medium uppercase tracking-wide text-zinc-500">Satellite</div>
+      <div className="rounded-2xl bg-white/5 px-3.5 py-3 text-xs">
+        <div className="font-medium tracking-wide text-zinc-500 uppercase">Satellite</div>
         <div className="mt-1 text-zinc-300">{lastPassDate ? `Last pass ${lastPassDate}` : "No imagery yet"}</div>
       </div>
     </aside>
