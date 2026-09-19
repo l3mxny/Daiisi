@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# SMS digest send-gating state and Python caches
+sms/.digest_state.json
+__pycache__/
 
 # vercel
 .vercel

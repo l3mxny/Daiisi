@@ -15,6 +15,7 @@ export interface WeatherMetrics {
   waterRatio: number;
   forecastRain16: number;
   daysSinceRain: number;
+  dryDaysAhead: number; // consecutive forecast days (starting today) with < RAIN_THRESHOLD_MM
   heatDays7: number;
 }
 
@@ -61,12 +62,19 @@ export function parseWeatherMetrics(json: OpenMeteoResponse): WeatherMetrics {
     }
   }
 
+  let dryDaysAhead = 0;
+  for (let i = todayIndex; i < precip.length; i++) {
+    const v = precip[i];
+    if (typeof v !== "number" || v >= RAIN_THRESHOLD_MM) break;
+    dryDaysAhead++;
+  }
+
   const heatWindowStart = Math.max(0, todayIndex - HEAT_WINDOW_DAYS);
   const heatDays7 = tempMax
     .slice(heatWindowStart, todayIndex)
     .filter((v): v is number => typeof v === "number" && v > HEAT_THRESHOLD_C).length;
 
-  return { rain30, et030, waterRatio, forecastRain16, daysSinceRain, heatDays7 };
+  return { rain30, et030, waterRatio, forecastRain16, daysSinceRain, dryDaysAhead, heatDays7 };
 }
 
 // No API key, no auth. Throws on any failure — weather has no cloud
