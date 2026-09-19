@@ -21,13 +21,9 @@ export interface SimulatedMessage {
   segments: number;
   createdAt: number;
   status: MessageStatus;
+  key: string; // the body without its date, to tell whether a new text has anything new to say
   topSeverity: Severity;
   imageUrl: string | null; // satellite photo attached as an MMS, if any
-}
-
-// The header carries today's date ("FarmOS 19Sep"); compare everything else.
-export function contentKey(body: string): string {
-  return body.replace(/FarmOS \d{2}[A-Za-z]{3}/, "FarmOS");
 }
 
 export interface SendDecision {
@@ -48,7 +44,7 @@ export function decideSimulatedSend(digest: DigestResult, last: SimulatedMessage
   if (SEVERITY_LEVEL[digest.lines[0].severity] > SEVERITY_LEVEL[last.topSeverity]) {
     return { send: true, reason: "More urgent than the last text." };
   }
-  if (contentKey(last.body) === contentKey(digest.text)) {
+  if (last.key === digest.key) {
     return { send: false, reason: "Held back: same as the last text, nothing new to say." };
   }
   return { send: true, reason: "The situation changed since the last text." };
@@ -65,6 +61,7 @@ export function makeSimulatedMessage(
     id: `SIM${hex}`,
     to,
     body: digest.text,
+    key: digest.key,
     chars: digest.chars,
     segments: digest.segments,
     createdAt: now,

@@ -1,5 +1,6 @@
 "use client";
 
+import LanguagePicker from "./LanguagePicker";
 import type { Plot } from "@/lib/types";
 
 export type TabId = "input" | "results" | "text" | "info";
@@ -89,9 +90,12 @@ export default function Sidebar({
         </nav>
       </div>
 
-      <div className="rounded-2xl bg-white/5 px-3.5 py-3 text-xs">
-        <div className="font-medium tracking-wide text-zinc-500 uppercase">Satellite</div>
-        <div className="mt-1 text-zinc-300">{lastPassDate ? `Last pass ${lastPassDate}` : "No imagery yet"}</div>
+      <div className="flex flex-col gap-3">
+        <LanguagePicker />
+        <div className="rounded-2xl bg-white/5 px-3.5 py-3 text-xs">
+          <div className="font-medium tracking-wide text-zinc-500 uppercase">Satellite</div>
+          <div className="mt-1 text-zinc-300">{lastPassDate ? `Last pass ${lastPassDate}` : "No imagery yet"}</div>
+        </div>
       </div>
     </aside>
   );

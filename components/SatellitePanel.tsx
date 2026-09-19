@@ -90,8 +90,8 @@ export default function SatellitePanel({ plots, digest }: { plots: Plot[]; diges
             <li key={plot.id} className="rounded-xl border border-zinc-200 bg-white p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="truncate font-serif text-lg text-zinc-900">{plot.label}</div>
-                  <div className="truncate font-mono text-sm text-zinc-600">
+                  <div translate="no" className="truncate font-serif text-lg text-zinc-900">{plot.label}</div>
+                  <div translate="no" className="truncate font-mono text-sm text-zinc-600">
                     {line ? (line.shown ? line.text : `${line.text}  (counted in "+more")`) : "Not in the text: nothing to do"}
                   </div>
                 </div>
