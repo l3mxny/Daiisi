@@ -2,11 +2,12 @@
 
 import type { Plot } from "@/lib/types";
 
-export type TabId = "input" | "results" | "info";
+export type TabId = "input" | "results" | "text" | "info";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "input", label: "Field input" },
   { id: "results", label: "Results" },
+  { id: "text", label: "Farmer's text" },
   { id: "info", label: "General info" },
 ];
 
@@ -22,6 +23,13 @@ function TabIcon({ id }: { id: TabId }) {
     return (
       <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4">
         <rect x="4" y="4" width="8" height="8" rx="1.2" transform="rotate(45 8 8)" />
+      </svg>
+    );
+  }
+  if (id === "text") {
+    return (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" strokeLinejoin="round" />
       </svg>
     );
   }
