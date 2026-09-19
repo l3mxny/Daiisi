@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from digest import compose_digest
-from from_app import field_from_app, rain_ratio_to_percentile
+from from_app import field_from_app, parse_details, plot_from_app, rain_ratio_to_percentile
 from send_alerts import load_farmers
 
 
@@ -65,6 +65,49 @@ class FromAppTests(unittest.TestCase):
             farmers = load_farmers(p)
         self.assertEqual([f.name for f in farmers[0].fields], ["Map Plot", "Manual"])
         self.assertEqual(farmers[0].fields[0].percentile, 8)
+
+    def test_details_are_parsed_and_named(self):
+        details = {"name": " North Plot ", "crop": "Maize", "plantedOn": "2026-08-01", "soilType": "Sandy"}
+        plot = plot_from_app("Plot 1", app_response(), details)
+        self.assertEqual(plot.field.name, "North Plot")  # the farmer's own name wins
+        self.assertEqual((plot.details.crop, plot.details.soil_type), ("Maize", "Sandy"))
+        self.assertEqual(plot.details.days_since_planted(date(2026, 9, 19)), 49)
+
+    def test_details_are_optional(self):
+        plot = plot_from_app("Plot 1", app_response(), None)
+        self.assertEqual(plot.field.name, "Plot 1")
+        self.assertEqual((plot.details.crop, plot.details.planted_on, plot.details.soil_type), ("", None, None))
+        self.assertIsNone(plot.details.days_since_planted(date(2026, 9, 19)))
+        self.assertEqual(parse_details({"name": "", "crop": "", "plantedOn": None, "soilType": None}), parse_details(None))
+
+    def test_bad_details_are_clear_errors(self):
+        with self.assertRaisesRegex(ValueError, "soilType"):
+            parse_details({"soilType": "Silt"})
+        with self.assertRaisesRegex(ValueError, "plantedOn"):
+            parse_details({"plantedOn": "01/08/2026"})
+
+    def test_details_never_change_the_message(self):
+        resp = app_response()
+        bare = compose_digest([plot_from_app("P", resp, None).field], today=date(2026, 9, 19))
+        rich = compose_digest(
+            [plot_from_app("P", resp, {"crop": "Kale", "plantedOn": "2026-09-10", "soilType": "Clay"}).field],
+            today=date(2026, 9, 19),
+        )
+        self.assertEqual(bare, rich)
+
+    def test_farmers_file_carries_details(self):
+        data = {"farmers": [{"id": "a", "name": "A", "phone": None, "fields": [
+            {"name": "Map Plot", "app_response": app_response(),
+             "details": {"name": "North Plot", "crop": "Maize", "plantedOn": "2026-08-01", "soilType": "Loam"}},
+            {"name": "Manual", "rain_30d_mm": 1, "percentile": 50, "dry_days_ahead": 0,
+             "forecast_rain_mm": 0, "ndvi_trend": "stable", "details": {"crop": "Beans"}},
+        ]}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            p = Path(tmp) / "f.json"
+            p.write_text(json.dumps(data))
+            farmer = load_farmers(p)[0]
+        self.assertEqual([f.name for f in farmer.fields], ["North Plot", "Manual"])
+        self.assertEqual((farmer.details["North Plot"].crop, farmer.details["Manual"].crop), ("Maize", "Beans"))
 
 
 if __name__ == "__main__":

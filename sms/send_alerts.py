@@ -16,30 +16,37 @@ import sys
 from pathlib import Path
 
 from digest import FieldState
-from from_app import field_from_app
+from from_app import PlotDetails, parse_details, plot_from_app
 from sender import PERSIST_DAYS, ConfigError, Farmer, InvalidPhoneNumber, JsonStateStore, run_farmers, validate_e164
 
 HERE = Path(__file__).parent
 
 
-def load_field(entry: dict) -> FieldState:
-    """A plot is either explicit FieldState keys or {"name": ..., "app_response": <saved /api/field JSON>}."""
+def load_plot(entry: dict) -> tuple[FieldState, PlotDetails]:
+    """A plot is explicit FieldState keys or {"name", "app_response": <saved /api/field JSON>}; either may
+    carry "details": {name, crop, plantedOn, soilType} exactly as the app stores them."""
     if "app_response" in entry:
-        return field_from_app(entry["name"], entry["app_response"])
-    return FieldState(**entry)
+        plot = plot_from_app(entry["name"], entry["app_response"], entry.get("details"))
+        return plot.field, plot.details
+    fields = {k: v for k, v in entry.items() if k != "details"}
+    return FieldState(**fields), parse_details(entry.get("details"))
 
 
 def load_farmers(path: Path) -> list[Farmer]:
     data = json.loads(path.read_text())
-    return [
-        Farmer(
-            id=f["id"],
-            name=f["name"],
-            phone=f.get("phone"),
-            fields=[load_field(fs) for fs in f["fields"]],
+    farmers = []
+    for f in data["farmers"]:
+        plots = [load_plot(p) for p in f["plots" if "plots" in f else "fields"]]
+        farmers.append(
+            Farmer(
+                id=f["id"],
+                name=f["name"],
+                phone=f.get("phone"),
+                fields=[fs for fs, _ in plots],
+                details={fs.name: d for fs, d in plots},
+            )
         )
-        for f in data["farmers"]
-    ]
+    return farmers
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    logging.getLogger("twilio").setLevel(logging.WARNING)  # its request log prints the Account SID
     dry_run = not args.send
     try:
         if args.to:

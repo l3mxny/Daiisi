@@ -192,7 +192,7 @@ class SenderTests(unittest.TestCase):
         self.assertIsNotNone(self.store.get("b"))
 
     def test_specific_error_messages(self):
-        for code, needle in ((21211, "invalid"), (21610, "unsubscribed")):
+        for code, needle in ((21211, "invalid"), (21610, "unsubscribed"), (572006, "predefined templates")):
             client = MagicMock()
             client.messages.create.side_effect = twilio_error(code)
             outs = self.run_once([Farmer(f"f{code}", "F", URGENT)], client)

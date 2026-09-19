@@ -14,11 +14,12 @@ import os
 import re
 import tempfile
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dc_field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+from from_app import PlotDetails
 from digest import (
     INSPECT,
     IRRIGATE_3D,
@@ -100,6 +101,11 @@ def _friendly(code: int | None, msg: str, to: str) -> str:
         return f"Twilio rejected {to} as an invalid 'to' number."
     if code == 21610:
         return f"{to} has unsubscribed (replied STOP). Do not message them until they reply START."
+    if code == 572006:
+        return (
+            "Twilio trial accounts can only send Twilio's predefined templates, not custom text "
+            "like the digest. Upgrade the account in the Twilio console to send it."
+        )
     return f"Twilio error {code}: {msg}"
 
 
@@ -285,6 +291,7 @@ class Farmer:
     name: str
     fields: list[FieldState]
     phone: str | None = None
+    details: dict[str, PlotDetails] = dc_field(default_factory=dict)  # by plot name; carried, not scored
 
 
 @dataclass

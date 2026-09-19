@@ -6,6 +6,10 @@ Sentinel-2 NDVI); nothing is hard-coded per plot. Shape reference: lib/types.ts 
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date
+from typing import NamedTuple
+
 from digest import FieldState
 
 # The app has no station percentile, only rain30 / (5-year normal) = rainAnomalyRatio. The digest
@@ -25,6 +29,56 @@ def rain_ratio_to_percentile(ratio: float) -> int:
         if ratio <= x1:
             return round(y0 + (y1 - y0) * (ratio - x0) / (x1 - x0))
     return _RATIO_TO_PERCENTILE[-1][1]
+
+
+SOIL_TYPES = ("Clay", "Loam", "Sandy")  # the options in the app's plot form (lib/types.ts SoilType)
+
+
+@dataclass(frozen=True)
+class PlotDetails:
+    """What the farmer told us about a plot (mirrors FieldDetails in lib/types.ts).
+
+    Carried along for whoever analyses the plot; nothing here affects scoring, actions or the message.
+    """
+
+    name: str = ""
+    crop: str = ""
+    planted_on: date | None = None
+    soil_type: str | None = None
+
+    def days_since_planted(self, today: date) -> int | None:
+        return None if self.planted_on is None else (today - self.planted_on).days
+
+
+def parse_details(raw: dict | None) -> PlotDetails:
+    """Parse the app's plot details ({name, crop, plantedOn, soilType}); missing values stay empty."""
+    if not raw:
+        return PlotDetails()
+    soil = raw.get("soilType")
+    if soil is not None and soil not in SOIL_TYPES:
+        raise ValueError(f"soilType must be one of {SOIL_TYPES}, got {soil!r}")
+    planted = raw.get("plantedOn")
+    try:
+        planted_on = date.fromisoformat(planted) if planted else None
+    except ValueError as exc:
+        raise ValueError(f"plantedOn must be yyyy-mm-dd, got {planted!r}") from exc
+    return PlotDetails(
+        name=(raw.get("name") or "").strip(),
+        crop=(raw.get("crop") or "").strip(),
+        planted_on=planted_on,
+        soil_type=soil,
+    )
+
+
+class AppPlot(NamedTuple):
+    field: FieldState
+    details: PlotDetails
+
+
+def plot_from_app(label: str, response: dict, details: dict | None = None) -> AppPlot:
+    """A map plot as (scored field, farmer's details). The plot is named by the farmer's own name if given."""
+    d = parse_details(details)
+    return AppPlot(field_from_app(d.name or label, response), d)
 
 
 def field_from_app(label: str, response: dict) -> FieldState:
