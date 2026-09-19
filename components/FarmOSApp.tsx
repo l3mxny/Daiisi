@@ -63,7 +63,7 @@ export default function FarmOSApp() {
       const res = await fetch("/api/field", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bbox }),
+        body: JSON.stringify({ bbox, fieldId: id }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -145,14 +145,16 @@ export default function FarmOSApp() {
     setPlots((prev) => prev.map((p) => (p.id === id ? { ...p, details: { ...p.details, ...patch } } : p)));
   }
 
-  function handleSaveField(id: string) {
+  async function handleSaveField(id: string) {
     const plot = plots.find((p) => p.id === id);
     if (!plot) return;
     setPlots((prev) =>
       prev.map((p) => (p.id === id ? { ...p, saved: true, label: p.details.name || p.label, status: "loading" } : p))
     );
     setMapMode("cursor");
-    persistField(plot);
+    // Awaited so the field row exists before fetchPlotStats asks /api/field
+    // to record this week's stress event against it.
+    await persistField(plot);
     fetchPlotStats(id, plot.bbox);
   }
 

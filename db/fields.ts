@@ -70,3 +70,9 @@ export async function listFields(): Promise<FieldRow[]> {
   const { rows } = await db.query("SELECT * FROM fields ORDER BY created_at ASC");
   return rows.map(toFieldRow);
 }
+
+export async function getFieldById(id: string): Promise<FieldRow | null> {
+  const db = getDb();
+  const { rows } = await db.query("SELECT * FROM fields WHERE id = $1", [id]);
+  return rows[0] ? toFieldRow(rows[0]) : null;
+}

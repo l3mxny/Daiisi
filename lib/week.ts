@@ -6,3 +6,11 @@ export function getWeekStart(date: Date = new Date()): string {
   d.setUTCDate(d.getUTCDate() - d.getUTCDay());
   return d.toISOString().slice(0, 10);
 }
+
+// The Sunday one week before the given date's week — used to look up the
+// stress_events row a new snapshot should evaluate the outcome of.
+export function getPreviousWeekStart(date: Date = new Date()): string {
+  const d = new Date(`${getWeekStart(date)}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 7);
+  return d.toISOString().slice(0, 10);
+}

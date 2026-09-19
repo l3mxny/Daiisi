@@ -78,3 +78,11 @@ export async function computeFieldSnapshot(bbox: Bbox, options: { withImages: bo
 
   return { observation, weather, climateNormal, stressEvent, usedFallback };
 }
+
+// The short text a stress_events row is embedded from — shared so a manual
+// refresh and the scheduled weekly job describe the same snapshot the same
+// way, since both write into the same table.
+export function buildStressEventSummary(fieldName: string, crop: string, snapshot: FieldSnapshot): string {
+  const label = crop ? `${crop} field "${fieldName}"` : `Field "${fieldName}"`;
+  return `${label} — ${snapshot.stressEvent.severity.toUpperCase()}: ${snapshot.stressEvent.message}`;
+}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import NdviChart from "./NdviChart";
+import InterventionLogger from "./InterventionLogger";
 import type { FieldApiResponse, Plot } from "@/lib/types";
 import type { Severity } from "@/lib/stressEvent";
 import { buildChangeSinceLastCheck, buildPlotRecommendation, type PlotRecommendation } from "@/lib/recommendations";
@@ -200,6 +201,10 @@ function ResultCard({
                 </li>
               ))}
             </ul>
+          </div>
+
+          <div className="mt-4">
+            <InterventionLogger stressEventId={data.stressEventId} />
           </div>
 
           {data.observation.timeseries.length > 0 && (

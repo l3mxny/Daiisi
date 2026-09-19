@@ -20,6 +20,7 @@ export interface FieldApiResponse {
   weather: WeatherMetrics;
   stressEvent: StressEvent;
   usedFallback: boolean;
+  stressEventId: string | null; // this week's stress_events row, for logging an intervention against
   error?: string;
 }
 

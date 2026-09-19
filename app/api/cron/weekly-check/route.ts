@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { listFields } from "@/db/fields";
-import { upsertStressEvent } from "@/db/stressEvents";
+import { recordStressEvent } from "@/db/stressEvents";
+import { evaluatePendingOutcome } from "@/db/outcomes";
 import { computeFieldSnapshot } from "@/lib/fieldSnapshot";
-import { getEmbedding } from "@/lib/embeddings";
 import { getWeekStart } from "@/lib/week";
-
-function buildSummary(fieldName: string, crop: string, snapshot: Awaited<ReturnType<typeof computeFieldSnapshot>>): string {
-  const label = crop ? `${crop} field "${fieldName}"` : `Field "${fieldName}"`;
-  return `${label} — ${snapshot.stressEvent.severity.toUpperCase()}: ${snapshot.stressEvent.message}`;
-}
 
 // Vercel Cron calls this on a schedule (see vercel.ts). Guarded by
 // CRON_SECRET so it can't be triggered by an arbitrary request — Vercel
@@ -31,29 +26,8 @@ export async function GET(req: NextRequest) {
   const results = await Promise.allSettled(
     fields.map(async (field) => {
       const snapshot = await computeFieldSnapshot(field.bbox, { withImages: false });
-      const summary = buildSummary(field.name, field.crop, snapshot);
-      const embedding = await getEmbedding(summary);
-
-      await upsertStressEvent({
-        fieldId: field.id,
-        weekStart,
-        severity: snapshot.stressEvent.severity,
-        waterRatio: snapshot.weather.waterRatio,
-        rain30: snapshot.weather.rain30,
-        et030: snapshot.weather.et030,
-        forecastRain16: snapshot.weather.forecastRain16,
-        heatDays7: snapshot.weather.heatDays7,
-        rain30Normal: snapshot.climateNormal?.rain30Normal ?? null,
-        rainAnomalyRatio: snapshot.stressEvent.signature.rainAnomalyRatio,
-        ndviMean: snapshot.observation.ndviMean,
-        ndviDelta: snapshot.stressEvent.signature.ndviDelta,
-        ndviTrend: snapshot.stressEvent.signature.ndviTrend,
-        cloudCover: snapshot.observation.cloudCover,
-        daysSinceClear: snapshot.observation.daysSinceClear,
-        summary,
-        embedding,
-      });
-
+      await evaluatePendingOutcome(field, snapshot, weekStart);
+      await recordStressEvent(field, snapshot, weekStart);
       return field.id;
     })
   );
