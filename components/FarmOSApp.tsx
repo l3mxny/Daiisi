@@ -112,7 +112,33 @@ export default function FarmOSApp() {
     setPlots((prev) =>
       prev.map((p) => (p.id === id ? { ...p, bbox, status: p.saved ? "loading" : p.status } : p))
     );
-    if (plot.saved) fetchPlotStats(id, bbox);
+    if (plot.saved) {
+      persistField({ ...plot, bbox });
+      fetchPlotStats(id, bbox);
+    }
+  }
+
+  // Mirrors a saved field into Postgres (see db/fields.ts) so the weekly
+  // background job has something to iterate over — best-effort: a failure
+  // here shouldn't block the farmer from seeing their field's stats, which
+  // come from fetchPlotStats regardless.
+  async function persistField(plot: Plot) {
+    try {
+      await fetch("/api/fields", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: plot.id,
+          name: plot.details.name || plot.label,
+          crop: plot.details.crop,
+          soilType: plot.details.soilType,
+          plantedOn: plot.details.plantedOn,
+          bbox: plot.bbox,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save field to the database:", err);
+    }
   }
 
   function handleUpdateDetails(id: string, patch: FieldDetailsPatch) {
@@ -126,6 +152,7 @@ export default function FarmOSApp() {
       prev.map((p) => (p.id === id ? { ...p, saved: true, label: p.details.name || p.label, status: "loading" } : p))
     );
     setMapMode("cursor");
+    persistField(plot);
     fetchPlotStats(id, plot.bbox);
   }
 
