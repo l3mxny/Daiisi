@@ -2,10 +2,6 @@ export type Bbox = [number, number, number, number]; // [west, south, east, nort
 
 const HALF_SIZE_DEG = 0.0025;
 
-// Minimum drag distance (in degrees, per axis) before a map drag is treated
-// as a custom rectangle rather than a quick click.
-export const MIN_DRAWN_SIZE_DEG = 0.0005;
-
 export function bboxFromPoint(lat: number, lng: number): Bbox {
   return [lng - HALF_SIZE_DEG, lat - HALF_SIZE_DEG, lng + HALF_SIZE_DEG, lat + HALF_SIZE_DEG];
 }
