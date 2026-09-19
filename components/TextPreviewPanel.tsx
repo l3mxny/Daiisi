@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type Dispatch, type SetStateAction } from "react";
+import { useLanguage } from "./LanguageProvider";
 import SatellitePanel from "./SatellitePanel";
 import { composeDigest } from "@/lib/smsDigest";
 import {
@@ -20,7 +21,7 @@ const STATUS_STYLE: Record<MessageStatus, string> = {
 };
 
 function formatTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  return new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", second: "2-digit" });
 }
 
 export default function TextPreviewPanel({
@@ -32,13 +33,14 @@ export default function TextPreviewPanel({
   outbox: SimulatedMessage[];
   onOutboxChange: Dispatch<SetStateAction<SimulatedMessage[]>>;
 }) {
+  const { language } = useLanguage();
   const [phone, setPhone] = useState("");
   const [notice, setNotice] = useState<SendDecision | null>(null);
   const [attachPhoto, setAttachPhoto] = useState(false);
 
   const tracked = plots.filter((p) => p.saved && p.data !== null);
   const pending = plots.filter((p) => p.saved && p.data === null && p.status === "loading").length;
-  const digest = composeDigest(tracked.map((p) => ({ id: p.id, name: p.label, data: p.data! })));
+  const digest = composeDigest(tracked.map((p) => ({ id: p.id, name: p.label, data: p.data! })), { language });
 
   // The satellite photo of the field at the top of the text, if there is one to attach.
   const topPlot = tracked.find((p) => p.id === digest.lines[0]?.id);
@@ -90,7 +92,7 @@ export default function TextPreviewPanel({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={photoUrl} alt={`Satellite photo of ${topPlot?.label ?? "the field"}`} className="h-40 w-full object-cover" />
                   )}
-                  <div className="px-4 py-3 whitespace-pre-wrap">{digest.text}</div>
+                  <div translate="no" className="px-4 py-3 whitespace-pre-wrap">{digest.text}</div>
                 </div>
                 <div className="mt-2 px-1 text-[11px] text-zinc-400">Today&apos;s text, not sent</div>
               </div>
@@ -98,18 +100,26 @@ export default function TextPreviewPanel({
               <div className="mx-auto mt-4 max-w-xs">
                 <div className="flex justify-between text-xs text-zinc-500">
                   <span>
-                    {digest.chars} characters · {digest.segments} SMS segment{digest.segments === 1 ? "" : "s"}
+                    {digest.chars} characters · {digest.segments} {digest.segments === 1 ? "SMS segment" : "SMS segments"}
                   </span>
-                  <span>160 per segment</span>
+                  <span>{digest.perSegment} per segment</span>
                 </div>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-200">
                   <div
-                    className={`h-full rounded-full ${digest.chars > 160 ? "bg-amber-500" : "bg-green-600"}`}
-                    style={{ width: `${Math.min(100, Math.round((digest.chars / 160) * 100))}%` }}
+                    className={`h-full rounded-full ${digest.chars > digest.perSegment ? "bg-amber-500" : "bg-green-600"}`}
+                    style={{ width: `${Math.min(100, Math.round((digest.chars / digest.perSegment) * 100))}%` }}
                   />
                 </div>
-                {digest.chars > 160 && (
-                  <p className="mt-1 text-xs text-amber-700">Over 160 characters, so it splits into more than one text.</p>
+                {digest.chars > digest.perSegment && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Over {digest.perSegment} characters, so it splits into more than one text.
+                  </p>
+                )}
+                {digest.encoding === "ucs2" && (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    This language needs a different text encoding, so each text holds only 70 characters and long
+                    messages split sooner.
+                  </p>
                 )}
               </div>
             </div>
@@ -188,9 +198,9 @@ export default function TextPreviewPanel({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={m.imageUrl} alt="Attached satellite photo" className="mt-2 h-28 w-full rounded-md object-cover" />
                       )}
-                      <pre className="mt-2 font-sans text-sm whitespace-pre-wrap text-zinc-900">{m.body}</pre>
+                      <pre translate="no" className="mt-2 font-sans text-sm whitespace-pre-wrap text-zinc-900">{m.body}</pre>
                       <div className="mt-2 text-[11px] text-zinc-400">
-                        {m.chars} chars · {m.segments} segment{m.segments === 1 ? "" : "s"}
+                        {m.chars} chars · {m.segments} {m.segments === 1 ? "segment" : "segments"}
                         {m.imageUrl ? " · with photo (MMS)" : ""} · {m.id}
                       </div>
                     </li>

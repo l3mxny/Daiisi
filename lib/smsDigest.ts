@@ -1,5 +1,7 @@
 import { buildPlotRecommendation } from "./recommendations";
 import type { Severity } from "./stressEvent";
+import { languageByCode, type LanguageCode } from "./languages";
+import { smsMonth, smsPhrase, type SmsPhraseKey } from "./smsPhrases";
 import type { FieldApiResponse } from "./types";
 
 // The farmer's SMS digest, built ON TOP of the app's own analysis: which plots
@@ -75,39 +77,72 @@ export function segmentCount(text: string): number {
   return n <= SINGLE_SEGMENT ? 1 : Math.ceil(n / MULTI_SEGMENT);
 }
 
+// Languages written in other scripts (Hindi...) can't use GSM-7 at all. They go out as Unicode
+// (UCS-2), where a segment holds only 70 characters (67 when a message is split), so their texts
+// split sooner. Latin-script languages are always folded down to GSM-7 (accents dropped where
+// GSM-7 has no equivalent) so they keep the full 160 characters.
+const UCS2_SINGLE_SEGMENT = 70;
+const UCS2_MULTI_SEGMENT = 67;
+
+export type SmsEncoding = "gsm7" | "ucs2";
+
+export interface SmsSize {
+  encoding: SmsEncoding;
+  chars: number;
+  segments: number;
+  perSegment: number; // how many characters fit in one segment for this encoding
+}
+
+export function smsSize(text: string): SmsSize {
+  if ([...text].every(inGsm7)) {
+    const n = gsm7Length(text);
+    const segments = n === 0 ? 0 : n <= SINGLE_SEGMENT ? 1 : Math.ceil(n / MULTI_SEGMENT);
+    return { encoding: "gsm7", chars: text.length, segments, perSegment: SINGLE_SEGMENT };
+  }
+  const n = text.length; // UTF-16 units, which is what UCS-2 counts
+  const segments = n === 0 ? 0 : n <= UCS2_SINGLE_SEGMENT ? 1 : Math.ceil(n / UCS2_MULTI_SEGMENT);
+  return { encoding: "ucs2", chars: n, segments, perSegment: UCS2_SINGLE_SEGMENT };
+}
+
+function sanitizeForSms(text: string, allowUnicode: boolean): string {
+  if (!allowUnicode) return toGsm7(text);
+  let out = "";
+  for (const ch of text) out += ch in TYPOGRAPHIC ? TYPOGRAPHIC[ch] : ch;
+  return out;
+}
+
 // --- Turning the app's analysis into short SMS phrases -----------------------
 
 // The app's advice is a sentence ("Irrigate soon — the 16-day forecast..."), far
-// too long for a text. This maps the first action to a short imperative code by
-// keyword. If the wording is ever rewritten and nothing matches, it degrades to a
-// generic code based on severity rather than breaking.
-export function actionCodeFor(severity: Severity, actions: string[]): string {
+// too long for a text. This maps the first action to a short imperative by keyword,
+// as a phrase key the chosen language then turns into words (see smsPhrases.ts).
+// If the wording is ever rewritten and nothing matches, it degrades to a generic
+// action based on severity rather than breaking.
+export function actionKeyFor(severity: Severity, actions: string[]): SmsPhraseKey {
   const first = (actions[0] ?? "").trim();
-  if (/^hold off/i.test(first)) return "HOLD OFF";
-  if (/^irrigate/i.test(first)) return severity === "act" ? "IRRIGATE NOW" : "IRRIGATE 3D";
-  if (/^monitor/i.test(first)) return "MONITOR";
-  if (/inspect/i.test(first)) return "INSPECT";
-  return severity === "act" ? "ACT NOW" : "CHECK 3D";
+  if (/^hold off/i.test(first)) return "holdOff";
+  if (/^irrigate/i.test(first)) return severity === "act" ? "irrigateNow" : "irrigate3d";
+  if (/^monitor/i.test(first)) return "monitor";
+  if (/inspect/i.test(first)) return "inspect";
+  return severity === "act" ? "actNow" : "check3d";
 }
 
-// The single most decision-relevant fact, in plain words (the numbers stay in
+// The single most decision-relevant fact, as a phrase key (plain words, numbers stay in
 // the app). Read from the app's structured signals, not from its sentences.
-export function reasonFor(data: FieldApiResponse): string {
+export function reasonKeyFor(data: FieldApiResponse): SmsPhraseKey {
   const s = data.stressEvent.signature;
   const anomaly = s.rainAnomalyRatio;
-  if (anomaly !== null && anomaly < 0.5) return "very dry";
+  if (anomaly !== null && anomaly < 0.5) return "veryDry";
   if (s.waterRatio < 0.75 || (anomaly !== null && anomaly < 0.75)) return "dry";
   // With fallback imagery the NDVI belongs to a different place; don't cite it.
-  if (s.ndviTrend === "declining" && !data.usedFallback) return "crops fading";
-  if (s.heatDays7 >= 3) return "hot spell";
-  return "needs a look";
+  if (s.ndviTrend === "declining" && !data.usedFallback) return "cropsFading";
+  if (s.heatDays7 >= 3) return "hotSpell";
+  return "needsLook";
 }
 
 // --- The digest ----------------------------------------------------------------
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const DEFAULT_MAX_LINES = 3;
-const DEFAULT_GREETING = "Good morning!";
 
 export interface DigestPlotInput {
   id?: string; // optional, echoed back on the line so a UI can match lines to plots
@@ -129,46 +164,61 @@ export interface DigestLine {
 
 export interface DigestResult {
   text: string;
+  key: string; // the text without today's date: two texts with the same key say the same thing
   chars: number;
   segments: number;
+  encoding: SmsEncoding;
+  perSegment: number;
   totalActionable: number;
   lines: DigestLine[]; // every actionable plot, ranked
 }
 
-function cleanName(name: string): string {
-  return toGsm7(name).split(/\s+/).filter(Boolean).join(" ") || "Plot";
-}
-
-function dateTag(d: Date): string {
-  return `${String(d.getDate()).padStart(2, "0")}${MONTHS[d.getMonth()]}`;
+function cleanName(name: string, allowUnicode: boolean): string {
+  return sanitizeForSms(name, allowUnicode).split(/\s+/).filter(Boolean).join(" ") || "Plot";
 }
 
 export function composeDigest(
   plots: DigestPlotInput[],
-  options: { maxLines?: number; today?: Date; greeting?: string } = {}
+  options: { maxLines?: number; today?: Date; language?: LanguageCode } = {}
 ): DigestResult {
   const maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
-  const greeting = options.greeting ?? DEFAULT_GREETING;
-  const hello = greeting ? `${greeting} ` : "";
-  const tag = dateTag(options.today ?? new Date());
+  const language = options.language ?? "en";
+  const allowUnicode = languageByCode(language).script !== "latin";
+  const today = options.today ?? new Date();
+  const p = (key: SmsPhraseKey, params?: Record<string, string | number>) => smsPhrase(language, key, params);
+  const dateTag = `${String(today.getDate()).padStart(2, "0")}${smsMonth(language, today.getMonth())}`;
 
   // Same ordering as the Results tab: highest priority score first.
   const ranked = plots
-    .filter((p) => p.data.stressEvent.severity !== "ok")
-    .map((p) => ({ plot: p, rec: buildPlotRecommendation(p.data) }))
+    .filter((pl) => pl.data.stressEvent.severity !== "ok")
+    .map((pl) => ({ plot: pl, rec: buildPlotRecommendation(pl.data) }))
     .sort((a, b) => b.rec.priorityScore - a.rec.priorityScore);
 
+  const finish = (lines: DigestLine[], render: (date: string) => string): DigestResult => {
+    const text = sanitizeForSms(render(dateTag), allowUnicode);
+    const size = smsSize(text);
+    return {
+      text,
+      key: sanitizeForSms(render(""), allowUnicode),
+      chars: size.chars,
+      segments: size.segments,
+      encoding: size.encoding,
+      perSegment: size.perSegment,
+      totalActionable: lines.length,
+      lines,
+    };
+  };
+
   if (ranked.length === 0) {
-    const text = toGsm7(`${hello}FarmOS ${tag}: all fields OK. No action.`);
-    return { text, chars: text.length, segments: segmentCount(text), totalActionable: 0, lines: [] };
+    return finish([], (date) => `${p("greeting")} ${p("allOk", { date })}`);
   }
 
   const n = ranked.length;
   const lines: DigestLine[] = ranked.map(({ plot, rec }, i) => {
     const severity = plot.data.stressEvent.severity;
-    const name = cleanName(plot.name);
-    const reason = reasonFor(plot.data);
-    const action = actionCodeFor(severity, rec.actions);
+    const name = cleanName(plot.name, allowUnicode);
+    const reason = p(reasonKeyFor(plot.data));
+    const action = p(actionKeyFor(severity, rec.actions));
     return {
       id: plot.id,
       rank: i + 1,
@@ -182,10 +232,10 @@ export function composeDigest(
     };
   });
 
-  const out = [`${hello}FarmOS ${tag}: ${n} field${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} action.`];
-  out.push(...lines.filter((l) => l.shown).map((l) => l.text));
-  if (n > maxLines) out.push(`+${n - maxLines} more.`);
-
-  const text = toGsm7(out.join("\n"));
-  return { text, chars: text.length, segments: segmentCount(text), totalActionable: n, lines };
+  return finish(lines, (date) => {
+    const header = n === 1 ? p("headerOne", { date }) : p("headerMany", { date, n });
+    const out = [`${p("greeting")} ${header}`, ...lines.filter((l) => l.shown).map((l) => l.text)];
+    if (n > maxLines) out.push(p("more", { k: n - maxLines }));
+    return out.join("\n");
+  });
 }
