@@ -1,0 +1,16 @@
+{
+  "input": {
+    "bounds": {
+      "bbox": [-120.1025, 36.5975, -120.0975, 36.6025],
+      "properties": {"crs": "http://www.opengis.net/def/crs/EPSG/0/4326"}
+    },
+    "data": [{"type": "sentinel-2-l2a"}]
+  },
+  "aggregation": {
+    "timeRange": {"from": "2026-06-14T00:00:00Z", "to": "2026-09-12T00:00:00Z"},
+    "aggregationInterval": {"of": "P1D"},
+    "resx": 0.0001,
+    "resy": 0.0001,
+    "evalscript": "//VERSION=3\nfunction setup() { return { input: [{bands: [\"B04\",\"B08\",\"SCL\",\"dataMask\"]}], output: [{id:\"ndvi\", bands:1, sampleType:\"FLOAT32\"},{id:\"dataMask\", bands:1}] }; }\nfunction evaluatePixel(s) { let bad = [3,8,9,10,11].includes(s.SCL); return { ndvi: [(s.B08 - s.B04)/(s.B08 + s.B04)], dataMask: [(s.dataMask === 1 \u0026\u0026 !bad) ? 1 : 0] }; }"
+  }
+}
