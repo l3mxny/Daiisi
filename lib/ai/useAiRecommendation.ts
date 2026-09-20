@@ -19,7 +19,7 @@ export interface AiRecommendationState {
 export function useAiRecommendation(stressEventId: string | null, refreshKey = 0): AiRecommendationState {
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidenceCandidate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(stressEventId !== null); // a replay has no stored event, so nothing to wait for
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {

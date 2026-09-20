@@ -7,7 +7,7 @@ import { captureDate, toIso } from "@/lib/noteDates";
 import type { FieldRef, ParsedNote } from "@/lib/noteTypes";
 
 // Optional voice notes for one field. Nothing here runs, and the microphone is never touched, until the
-// farmer clicks "Additional information" and then presses Record:
+// farmer clicks "Additional details" and then presses Record:
 //   - no getUserMedia() on page load or when the panel opens; the browser's permission prompt appears on
 //     the first Record press, tied to something the farmer deliberately did
 //   - recording ends on a second click or at MAX_SECONDS, whichever comes first
@@ -341,7 +341,7 @@ export default function FieldNotes({
         aria-controls={panelId}
         className="rounded-full border border-zinc-300 bg-white px-4 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100"
       >
-        Additional information
+        Additional details
       </button>
 
       {open && (

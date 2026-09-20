@@ -34,7 +34,7 @@ export default function NdviChart({ data: daily }: { data: NdviPoint[] }) {
           tickFormatter={(d: string) => `wk ${d.slice(5)}`}
           minTickGap={20}
         />
-        <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} width={36} />
+        <YAxis domain={[(min: number) => Math.max(0, Math.floor((min - 0.05) * 20) / 20), (max: number) => Math.min(1, Math.ceil((max + 0.05) * 20) / 20)]} tick={{ fontSize: 10 }} width={36} />
         <Tooltip formatter={(value) => (typeof value === "number" ? value.toFixed(3) : value)} />
         <Line type="monotone" dataKey="mean" stroke="#16a34a" strokeWidth={2} dot={false} />
       </LineChart>

@@ -3,12 +3,13 @@
 import { useState } from "react";
 import FieldNotes from "./FieldNotes";
 import NdviChart from "./NdviChart";
-import InterventionLogger from "./InterventionLogger";
 import AiRecommendation from "./AiRecommendation";
+import SpeakButton from "./SpeakButton";
 import PlotComparison from "./PlotComparison";
 import { useAiRecommendation } from "@/lib/ai/useAiRecommendation";
 import type { FieldApiResponse, Plot } from "@/lib/types";
 import type { Severity } from "@/lib/stressEvent";
+import { formatArea, MIN_RELIABLE_HECTARES } from "@/lib/geo";
 import { buildPlotRecommendation, type PlotRecommendation } from "@/lib/recommendations";
 
 const SEVERITY_DOT: Record<Severity, string> = {
@@ -46,15 +47,19 @@ function SummaryTiles({ readyPlots }: { readyPlots: Plot[] }) {
   const n = readyPlots.length;
   if (n === 0) return null;
 
-  const avgWaterPct = Math.round((readyPlots.reduce((sum, p) => sum + p.data!.weather.waterRatio, 0) / n) * 100);
-  const avgForecastRain = Math.round(readyPlots.reduce((sum, p) => sum + p.data!.weather.forecastRain16, 0) / n);
+  // Plots can be in different places, so an average across them describes none of them: show the spread.
+  const spread = (values: number[], unit: string) => {
+    const lo = Math.round(Math.min(...values));
+    const hi = Math.round(Math.max(...values));
+    return lo === hi ? `${lo}${unit}` : `${lo}–${hi}${unit}`;
+  };
   const maxHeatDays = Math.max(...readyPlots.map((p) => p.data!.weather.heatDays7));
   const needAttention = readyPlots.filter((p) => p.data!.stressEvent.severity !== "ok").length;
 
   const tiles = [
-    { label: "Water in the soil", value: `${avgWaterPct}%` },
-    { label: "Rain in 16 days", value: `${avgForecastRain} mm` },
-    { label: "Heat days (7d, >32°C)", value: String(maxHeatDays) },
+    { label: "Crop water need met by rain (30d)", value: spread(readyPlots.map((p) => p.data!.weather.waterRatio * 100), "%") },
+    { label: "Rain in next 16 days", value: spread(readyPlots.map((p) => p.data!.weather.forecastRain16), " mm") },
+    { label: "Most hot days (7d, >32°C)", value: String(maxHeatDays) },
     { label: "Fields need you", value: `${needAttention} of ${n}` },
   ];
 
@@ -125,11 +130,11 @@ function PlotCard({
         <div className="overflow-hidden">
           <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
             <div className="flex flex-wrap gap-1.5">
-              <StatPill label="soil water" value={`${Math.round(data.weather.waterRatio * 100)}%`} />
+              <StatPill label="of crop water need met by rain" value={`${Math.round(data.weather.waterRatio * 100)}%`} />
               <StatPill label="rain in 16d" value={`${Math.round(data.weather.forecastRain16)}mm`} />
               <StatPill label="hot days" value={String(data.weather.heatDays7)} />
-              {recommendation.irrigationLiters !== null && (
-                <StatPill label="to close deficit" value={`${recommendation.irrigationLiters.toLocaleString()}L`} />
+              {recommendation.irrigationMm !== null && (
+                <StatPill label="of irrigation to close the gap" value={`${recommendation.irrigationMm} mm`} />
               )}
             </div>
             {!pinned && (
@@ -173,6 +178,13 @@ function PlotCard({
             </div>
           )}
 
+          {recommendation.areaHectares < MIN_RELIABLE_HECTARES && (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+              This plot is only {formatArea(recommendation.areaHectares)}. Satellite pixels are 10 m across, so the
+              greenness reading covers just a few of them and is a rough guide. Draw a larger area for a reliable one.
+            </div>
+          )}
+
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="min-w-0">
               <div>
@@ -184,11 +196,15 @@ function PlotCard({
                 />
               </div>
 
-              <div className="mt-4">
-                <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Recommended action</div>
-                <ul className="mt-1.5 flex flex-col gap-1.5">
+              {/* Same box, padding and header row as the AI take above, so the two Listen buttons line up */}
+              <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold tracking-wide text-blue-800 uppercase">Recommended action</div>
+                  <SpeakButton text={recommendation.actions.join(" ")} />
+                </div>
+                <ul className="flex flex-col gap-1.5">
                   {recommendation.actions.map((action, i) => (
-                    <li key={i} className="rounded-2xl border border-blue-100 bg-blue-50 p-2.5 text-sm text-blue-900">
+                    <li key={i} className="rounded-xl border border-blue-100 bg-white p-2.5 text-sm text-blue-900">
                       {action}
                     </li>
                   ))}
@@ -196,12 +212,8 @@ function PlotCard({
               </div>
             </div>
             <div className="min-w-0">
-              <div>
-                <InterventionLogger stressEventId={data.stressEventId} />
-              </div>
-
               {data.observation.timeseries.length > 0 && (
-                <div className="mt-4">
+                <div>
                   <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
                     NDVI — week by week, last 90 days
                   </div>
@@ -210,21 +222,22 @@ function PlotCard({
                   </div>
                 </div>
               )}
-
-              <div className="mt-4">
-                <FieldNotes
-                  fieldId={plot.id}
-                  fieldLabel={plot.label}
-                  fieldChoices={fieldChoices}
-                  onNotesChanged={() => setNotesVersion((v) => v + 1)}
-                />
-              </div>
             </div>
+          </div>
+
+          {/* Full width, under both columns, so opening it fills the card instead of leaving blank space beside it */}
+          <div className="mt-2">
+            <FieldNotes
+              fieldId={plot.id}
+              fieldLabel={plot.label}
+              fieldChoices={fieldChoices}
+              onNotesChanged={() => setNotesVersion((v) => v + 1)}
+            />
           </div>
 
           <div className="mt-3 flex justify-center">
             <span className="text-xs text-zinc-400">
-              {plot.label} · {recommendation.areaHectares.toFixed(1)} ha
+              {plot.label} · {formatArea(recommendation.areaHectares)}
             </span>
           </div>
         </div>

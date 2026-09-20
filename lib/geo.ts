@@ -37,3 +37,13 @@ export function bboxAreaHectares(bbox: Bbox): number {
   const heightM = (north - south) * (Math.PI / 180) * EARTH_RADIUS_M;
   return Math.abs(widthM * heightM) / 10_000;
 }
+
+// Area for people: tiny plots in square metres (a "0.0 ha" field reads as a bug), everything else in hectares.
+export function formatArea(hectares: number): string {
+  if (hectares < 0.1) return `${Math.round(hectares * 10_000).toLocaleString("en-US")} m²`;
+  return `${hectares < 10 ? hectares.toFixed(2) : hectares.toFixed(1)} ha`;
+}
+
+// Sentinel-2 pixels are 10 m (0.01 ha), so a plot this small is only a handful of pixels and its greenness
+// reading is a rough guide, not a measurement.
+export const MIN_RELIABLE_HECTARES = 0.1;

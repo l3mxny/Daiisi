@@ -30,9 +30,10 @@ function toDateStr(d: Date): string {
 async function fetchYearWindow(
   lat: number,
   lng: number,
-  yearsAgo: number
+  yearsAgo: number,
+  asOf?: Date
 ): Promise<{ rain: number; et0: number } | null> {
-  const end = new Date();
+  const end = new Date(asOf ?? Date.now());
   end.setUTCFullYear(end.getUTCFullYear() - yearsAgo);
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - WINDOW_DAYS);
@@ -60,9 +61,9 @@ async function fetchYearWindow(
 // Purely enrichment data (a "how unusual is this" baseline) — unlike
 // weather.ts's getWeatherMetrics, callers should treat a failure here as
 // "no baseline available" rather than a hard error.
-export async function getClimateNormal(lat: number, lng: number): Promise<ClimateNormal | null> {
+export async function getClimateNormal(lat: number, lng: number, asOf?: Date): Promise<ClimateNormal | null> {
   const settled = await Promise.allSettled(
-    Array.from({ length: NORMAL_YEARS }, (_, i) => fetchYearWindow(lat, lng, i + 1))
+    Array.from({ length: NORMAL_YEARS }, (_, i) => fetchYearWindow(lat, lng, i + 1, asOf))
   );
 
   const rains: number[] = [];

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { bboxAreaHectares } from "@/lib/geo";
+import { bboxAreaHectares, formatArea } from "@/lib/geo";
 import type { Plot, SoilType } from "@/lib/types";
 
 export interface FieldDetailsPatch {
@@ -180,7 +180,7 @@ export default function FieldSidebar({
                   <span className="min-w-0 flex-1 truncate font-medium text-zinc-700">
                     {plot.details.name || plot.label}
                   </span>
-                  <span className="shrink-0 text-xs text-zinc-400">{bboxAreaHectares(plot.bbox).toFixed(1)} ha</span>
+                  <span className="shrink-0 text-xs text-zinc-400">{formatArea(bboxAreaHectares(plot.bbox))}</span>
                   <span
                     role="button"
                     tabIndex={0}
@@ -207,7 +207,7 @@ export default function FieldSidebar({
         {savedFields.length > 0 && (
           <div className="mt-1 flex items-center justify-between rounded-xl bg-zinc-50 px-3 py-2 text-sm">
             <span className="font-medium text-zinc-500">Total</span>
-            <span className="font-semibold text-zinc-700">{totalHa.toFixed(1)} ha</span>
+            <span className="font-semibold text-zinc-700">{formatArea(totalHa)}</span>
           </div>
         )}
       </div>

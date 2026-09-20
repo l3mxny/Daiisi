@@ -11,8 +11,12 @@ import type { ObservationResult } from "./types";
 // Shared by the interactive /api/field route (wants map imagery) and the
 // weekly background job (only wants the numeric/text signals) — pulled out
 // so both compute a field's condition the same way instead of drifting.
-export async function computeObservation(bbox: Bbox, options: { withImages: boolean }): Promise<ObservationResult> {
-  const scene = await findLatestClearScene(bbox);
+export async function computeObservation(
+  bbox: Bbox,
+  options: { withImages: boolean; asOf?: Date }
+): Promise<ObservationResult> {
+  const { asOf } = options;
+  const scene = await findLatestClearScene(bbox, 60, 20, asOf);
 
   if (!scene) {
     return {
@@ -23,18 +27,18 @@ export async function computeObservation(bbox: Bbox, options: { withImages: bool
       daysSinceClear: null,
       trueColorImage: null,
       ndviImage: null,
-      timeseries: await getNdviTimeSeries(bbox),
+      timeseries: await getNdviTimeSeries(bbox, 90, asOf),
     };
   }
 
   const [trueColorImage, ndviImage, timeseries] = await Promise.all([
     options.withImages ? getTrueColorImage(bbox, scene.date) : Promise.resolve(null),
     options.withImages ? getNdviImage(bbox, scene.date) : Promise.resolve(null),
-    getNdviTimeSeries(bbox),
+    getNdviTimeSeries(bbox, 90, asOf),
   ]);
 
   const date = scene.date.slice(0, 10);
-  const daysSinceClear = Math.round((Date.now() - new Date(scene.date).getTime()) / 86_400_000);
+  const daysSinceClear = Math.round(((asOf?.getTime() ?? Date.now()) - new Date(scene.date).getTime()) / 86_400_000);
   const latestSeriesPoint = timeseries[timeseries.length - 1] ?? null;
 
   return {
@@ -62,13 +66,16 @@ export interface FieldSnapshot {
 // to fixture imagery on a Sentinel Hub failure (see lib/fallback.ts). The
 // seasonal outlook is pure enrichment like climateNormal — getSeasonalOutlook
 // degrades to null on failure rather than rejecting.
-export async function computeFieldSnapshot(bbox: Bbox, options: { withImages: boolean }): Promise<FieldSnapshot> {
+export async function computeFieldSnapshot(
+  bbox: Bbox,
+  options: { withImages: boolean; asOf?: Date } // asOf: replay a past date instead of reading now
+): Promise<FieldSnapshot> {
   const [lat, lng] = bboxCentroid(bbox);
 
   const [weather, climateNormal, seasonalOutlook] = await Promise.all([
-    getWeatherMetrics(lat, lng),
-    getClimateNormal(lat, lng),
-    getSeasonalOutlook(lat, lng).catch(() => null),
+    getWeatherMetrics(lat, lng, options.asOf),
+    getClimateNormal(lat, lng, options.asOf),
+    options.asOf ? Promise.resolve(null) : getSeasonalOutlook(lat, lng).catch(() => null), // no historical outlook to replay
   ]);
 
   let observation: ObservationResult;

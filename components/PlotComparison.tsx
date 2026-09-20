@@ -34,14 +34,29 @@ interface Row {
   why: string[];
 }
 
-// The signals raising a plot's status, in words; empty when nothing is wrong.
+// The tags shown for a plot are gated on the FINAL verdict (the status chip). A plot the rules call OK never
+// shows a warning tag, because "All good" next to "Very little rain lately" reads as a contradiction; it shows
+// what made it fine instead. Watch and Act plots show the signals pushing them up, using the same cut-offs as
+// lib/stressEvent.ts.
 export function whyFor(plot: Plot): string[] {
   const d = plot.data!;
   const sig = d.stressEvent.signature;
+  const covered = d.weather.forecastRain16 >= d.weather.et030 - d.weather.rain30;
+
+  if (d.stressEvent.severity === "ok") {
+    const fine: string[] = [];
+    if (sig.waterRatio < 0.75 && covered) fine.push("Forecast rain covers the gap");
+    if (sig.ndviTrend === "improving") fine.push("Crop is greening up");
+    return fine;
+  }
+
   const why: string[] = [];
-  if (sig.waterRatio < 0.4) why.push("Soil water is low");
-  else if (sig.waterRatio < 0.75) why.push("Soil water is getting low");
-  if (sig.waterRatio < 0.75 && d.weather.forecastRain16 < 10) why.push("Little rain coming");
+  if (sig.waterRatio < 0.4) why.push("Very little rain lately");
+  else if (sig.waterRatio < 0.75) why.push("Rain is running short");
+  if (sig.waterRatio < 0.75) {
+    if (covered) why.push("Forecast rain should cover it");
+    else if (d.weather.forecastRain16 < 10) why.push("Little rain coming");
+  }
   if (sig.ndviTrend === "declining") why.push("Crop greenness is falling");
   if (sig.rainAnomalyRatio !== null && sig.rainAnomalyRatio < 0.5) why.push("Far less rain than usual");
   if (d.observation.daysSinceClear === null || d.observation.daysSinceClear > 14) why.push("Satellite view is old");
@@ -112,7 +127,7 @@ export default function PlotComparison({ plots }: { plots: Array<{ plot: Plot; p
             <tr className="border-b border-zinc-100">
               <th className={th}>Plot</th>
               <th className={th}>Status</th>
-              <th className={th}>Soil water</th>
+              <th className={th}>Rain vs crop need</th>
               <th className={th}>Rain vs usual</th>
               <th className={th}>Rain next 16d</th>
               <th className={th}>Hot days (7d)</th>
