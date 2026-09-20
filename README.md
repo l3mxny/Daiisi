@@ -1,5 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Docs
+
+See [`docs/`](./docs) for how the Field Input and Results pages are built:
+
+- [`docs/field-input.md`](./docs/field-input.md) — the map/draw screen
+- [`docs/results.md`](./docs/results.md) — the ranking dashboard, rule-based + AI recommendations, retrieval
+
 ## Getting Started
 
 First, run the development server:

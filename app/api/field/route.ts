@@ -69,6 +69,7 @@ export async function POST(req: NextRequest) {
     observation: snapshot.observation,
     weather: snapshot.weather,
     stressEvent: snapshot.stressEvent,
+    seasonalOutlook: snapshot.seasonalOutlook,
     usedFallback: snapshot.usedFallback,
     stressEventId,
   };

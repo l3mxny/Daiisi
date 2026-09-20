@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { upsertField, listFields } from "@/db/fields";
+import { upsertField, listFieldsByPhone } from "@/db/fields";
+import { normalizePhone } from "@/lib/phone";
 import type { Bbox } from "@/lib/geo";
 
 function isValidBbox(value: unknown): value is Bbox {
@@ -14,19 +15,22 @@ function isValidBbox(value: unknown): value is Bbox {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
+  const phone = typeof body?.phone === "string" ? normalizePhone(body.phone) : null;
 
   if (
     !body ||
+    !phone ||
     typeof body.id !== "string" ||
     typeof body.name !== "string" ||
     !body.name.trim() ||
     !isValidBbox(body.bbox)
   ) {
-    return NextResponse.json({ error: "id, name, and bbox are required" }, { status: 400 });
+    return NextResponse.json({ error: "phone, id, name, and bbox are required" }, { status: 400 });
   }
 
   const field = await upsertField({
     id: body.id,
+    phone,
     name: body.name,
     crop: typeof body.crop === "string" ? body.crop : "",
     soilType: typeof body.soilType === "string" ? body.soilType : null,
@@ -37,7 +41,11 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(field);
 }
 
-export async function GET() {
-  const fields = await listFields();
+export async function GET(req: NextRequest) {
+  const phone = normalizePhone(req.nextUrl.searchParams.get("phone") ?? "");
+  if (!phone) {
+    return NextResponse.json({ error: "A valid phone query param is required" }, { status: 400 });
+  }
+  const fields = await listFieldsByPhone(phone);
   return NextResponse.json(fields);
 }

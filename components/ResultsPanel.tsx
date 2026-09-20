@@ -3,27 +3,30 @@
 import { useState } from "react";
 import NdviChart from "./NdviChart";
 import InterventionLogger from "./InterventionLogger";
+import AiRecommendation from "./AiRecommendation";
+import { useAiRecommendation, firstLine } from "@/lib/ai/useAiRecommendation";
 import type { FieldApiResponse, Plot } from "@/lib/types";
 import type { Severity } from "@/lib/stressEvent";
+import type { SeasonalOutlook } from "@/lib/seasonalOutlook";
 import { buildChangeSinceLastCheck, buildPlotRecommendation, type PlotRecommendation } from "@/lib/recommendations";
 
-const SEVERITY_BORDER: Record<Severity, string> = {
-  ok: "border-l-green-500",
-  watch: "border-l-amber-500",
-  act: "border-l-red-500",
-};
-
-const SEVERITY_RANK_TEXT: Record<Severity, string> = {
-  ok: "text-green-700",
-  watch: "text-amber-700",
-  act: "text-red-700",
+const SEVERITY_DOT: Record<Severity, string> = {
+  ok: "bg-green-400",
+  watch: "bg-amber-400",
+  act: "bg-rose-400",
 };
 
 const SEVERITY_BADGE: Record<Severity, string> = {
-  ok: "bg-green-100 text-green-800",
-  watch: "bg-amber-100 text-amber-800",
-  act: "bg-red-100 text-red-800",
+  ok: "bg-green-50 text-green-700",
+  watch: "bg-amber-50 text-amber-700",
+  act: "bg-rose-50 text-rose-700",
 };
+
+function badgeText(severity: Severity): string {
+  if (severity === "act") return "Act now";
+  if (severity === "watch") return "Within 3 days";
+  return "All good";
+}
 
 function cardTitle(severity: Severity, actions: string[]): string {
   if (severity === "ok") return "Nothing to do";
@@ -33,22 +36,16 @@ function cardTitle(severity: Severity, actions: string[]): string {
   return "Walk this field and check it";
 }
 
-function badgeText(severity: Severity): string {
-  if (severity === "act") return "ACT NOW";
-  if (severity === "watch") return "WITHIN 3 DAYS";
-  const next = new Date();
-  next.setDate(next.getDate() + 7);
-  return `NEXT CHECK ${next.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase()}`;
-}
-
-function statFor(recommendation: PlotRecommendation, data: FieldApiResponse): { value: string; sub: string } {
-  if (recommendation.irrigationLiters !== null) {
-    return { value: `${recommendation.irrigationLiters.toLocaleString()} L`, sub: "to close 30-day deficit" };
+function describeSeasonalOutlook(outlook: SeasonalOutlook | null): string | null {
+  if (!outlook || (outlook.precipLean === "near_normal" && outlook.tempLean === "near_normal")) return null;
+  const parts: string[] = [];
+  if (outlook.precipLean !== "near_normal") {
+    parts.push(`${outlook.precipLean} than normal rainfall (${Math.round(outlook.precipConfidence * 100)}% confidence)`);
   }
-  if (data.stressEvent.severity === "ok") {
-    return { value: "Healthy", sub: `soil water ${Math.round(data.weather.waterRatio * 100)}%` };
+  if (outlook.tempLean !== "near_normal") {
+    parts.push(`${outlook.tempLean} than normal temperatures (${Math.round(outlook.tempConfidence * 100)}% confidence)`);
   }
-  return { value: `${Math.round(data.weather.waterRatio * 100)}%`, sub: "soil water" };
+  return `Next ${outlook.windowDays} days: ${parts.join(", ")}.`;
 }
 
 // Includes plots currently re-fetching (status "loading" but still holding
@@ -65,9 +62,7 @@ function SummaryTiles({ readyPlots }: { readyPlots: Plot[] }) {
   const n = readyPlots.length;
   if (n === 0) return null;
 
-  const avgWaterPct = Math.round(
-    (readyPlots.reduce((sum, p) => sum + p.data!.weather.waterRatio, 0) / n) * 100
-  );
+  const avgWaterPct = Math.round((readyPlots.reduce((sum, p) => sum + p.data!.weather.waterRatio, 0) / n) * 100);
   const avgForecastRain = Math.round(readyPlots.reduce((sum, p) => sum + p.data!.weather.forecastRain16, 0) / n);
   const maxHeatDays = Math.max(...readyPlots.map((p) => p.data!.weather.heatDays7));
   const needAttention = readyPlots.filter((p) => p.data!.stressEvent.severity !== "ok").length;
@@ -82,12 +77,20 @@ function SummaryTiles({ readyPlots }: { readyPlots: Plot[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {tiles.map((t) => (
-        <div key={t.label} className="rounded-lg border border-zinc-200 bg-white px-4 py-3">
+        <div key={t.label} className="rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-sm">
           <div className="font-serif text-2xl text-zinc-900">{t.value}</div>
           <div className="text-xs text-zinc-500">{t.label}</div>
         </div>
       ))}
     </div>
+  );
+}
+
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-600">
+      <span className="font-medium text-zinc-800">{value}</span> {label}
+    </span>
   );
 }
 
@@ -100,53 +103,80 @@ function PlotThumbnail({ plot }: { plot: Plot }) {
   return <div className="h-full w-full" style={{ backgroundColor: plot.color, opacity: 0.5 }} />;
 }
 
-function ResultCard({
-  rank,
+function PlotCard({
   plot,
   data,
   recommendation,
-  expanded,
-  onToggle,
   onRefresh,
 }: {
-  rank: number;
   plot: Plot;
   data: FieldApiResponse;
   recommendation: PlotRecommendation;
-  expanded: boolean;
-  onToggle: () => void;
   onRefresh: () => void;
 }) {
+  const [pinned, setPinned] = useState(false);
   const severity = data.stressEvent.severity;
-  const stat = statFor(recommendation, data);
+  const seasonalNote = describeSeasonalOutlook(data.seasonalOutlook);
+  const ai = useAiRecommendation(data.stressEventId);
+
+  const headline = ai.recommendation ? firstLine(ai.recommendation) : cardTitle(severity, recommendation.actions);
+  const open = pinned; // CSS handles the hover-only preview; this forces it open once clicked
 
   return (
-    <li className={`overflow-hidden rounded-lg border border-l-4 bg-white shadow-sm ${SEVERITY_BORDER[severity]}`}>
-      <button onClick={onToggle} className="flex w-full items-center gap-4 p-4 text-left">
-        <span className={`w-6 shrink-0 font-serif text-2xl ${SEVERITY_RANK_TEXT[severity]}`}>{rank}</span>
-        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-md bg-zinc-100">
-          <PlotThumbnail plot={plot} />
-        </div>
+    <li
+      className={`group overflow-hidden rounded-3xl border bg-white shadow-sm transition-all hover:shadow-md ${
+        pinned ? "border-zinc-200" : "border-zinc-100"
+      }`}
+    >
+      <button onClick={() => setPinned((p) => !p)} className="flex w-full items-start gap-3 p-4 text-left">
+        <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${SEVERITY_DOT[severity]}`} />
         <div className="min-w-0 flex-1">
-          <div className="truncate font-serif text-lg text-zinc-900">{cardTitle(severity, recommendation.actions)}</div>
-          <div className="truncate text-sm text-zinc-500">
-            {plot.label} · {recommendation.areaHectares.toFixed(1)} ha
-          </div>
+          <div className="truncate font-serif text-lg text-zinc-900">{plot.details.name || plot.label}</div>
+          <div className="truncate text-sm text-zinc-500">{headline}</div>
         </div>
-        <div className="hidden shrink-0 text-right sm:block">
-          <div className="font-serif text-xl text-zinc-900">{stat.value}</div>
-          <div className="text-xs text-zinc-500">{stat.sub}</div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className={`rounded px-2 py-1 text-[11px] font-semibold tracking-wide ${SEVERITY_BADGE[severity]}`}>
-            {badgeText(severity)}
-          </span>
-          <span className="text-xs text-zinc-500">{expanded ? "Hide ▲" : "Why? ▼"}</span>
-        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${SEVERITY_BADGE[severity]}`}>
+          {badgeText(severity)}
+        </span>
       </button>
 
-      {expanded && (
-        <div className="border-t border-zinc-200 bg-zinc-50 px-4 py-4">
+      {/* Hover preview — always mounted (so useAiRecommendation fetches once
+          up front and hovering feels instant), just visually collapsed via
+          the CSS grid-rows animation trick until hovered or pinned open. */}
+      <div
+        className={`grid px-4 transition-[grid-template-rows] duration-300 ease-out ${
+          open ? "grid-rows-[1fr] pb-4" : "grid-rows-[0fr] group-hover:grid-rows-[1fr] group-hover:pb-4"
+        }`}
+      >
+        <div className="overflow-hidden">
+          <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
+            <p className="text-sm text-zinc-600">
+              {ai.loading ? "Thinking it through…" : ai.recommendation || data.stressEvent.message}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              <StatPill label="soil water" value={`${Math.round(data.weather.waterRatio * 100)}%`} />
+              <StatPill label="rain in 16d" value={`${Math.round(data.weather.forecastRain16)}mm`} />
+              <StatPill label="hot days" value={String(data.weather.heatDays7)} />
+              {recommendation.irrigationLiters !== null && (
+                <StatPill label="to close deficit" value={`${recommendation.irrigationLiters.toLocaleString()}L`} />
+              )}
+            </div>
+            {!pinned && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPinned(true);
+                }}
+                className="self-start text-xs font-medium text-green-700 hover:text-green-800"
+              >
+                View full details →
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {pinned && (
+        <div className="border-t border-zinc-100 bg-zinc-50 px-4 py-4">
           <div className="mb-3 flex justify-end">
             <button
               onClick={(e) => {
@@ -159,44 +189,57 @@ function ResultCard({
               {plot.status === "loading" ? "Refreshing…" : "Refresh"}
             </button>
           </div>
+
           {plot.status === "error" && (
-            <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
               Refresh failed: {plot.error} — showing the last-known reading below.
             </div>
           )}
-
           {data.usedFallback && (
-            <div className="mb-4 rounded-md border border-zinc-300 bg-white p-3 text-sm text-zinc-700">
+            <div className="mb-4 rounded-2xl border border-zinc-200 bg-white p-3 text-sm text-zinc-700">
               Live Sentinel Hub request failed — showing cached sample imagery.
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="h-40 w-full overflow-hidden rounded-2xl bg-zinc-100">
+            <PlotThumbnail plot={plot} />
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
-                What the satellite sees
-              </div>
+              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">What the satellite sees</div>
               <p className="mt-1 text-sm text-zinc-700">{recommendation.satelliteOutlook}</p>
             </div>
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Why it is happening</div>
+              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Why it is happening</div>
               <p className="mt-1 text-sm text-zinc-700">{data.stressEvent.message}</p>
             </div>
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Last time</div>
+              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Last time</div>
               <p className="mt-1 text-sm text-zinc-700">
-                {plot.previousData
-                  ? buildChangeSinceLastCheck(plot.previousData, data)
-                  : "No previous check yet this session."}
+                {plot.previousData ? buildChangeSinceLastCheck(plot.previousData, data) : "No previous check yet this session."}
               </p>
             </div>
           </div>
 
+          {seasonalNote && (
+            <p className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900">{seasonalNote}</p>
+          )}
+
           <div className="mt-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Recommended action</div>
+            <AiRecommendation
+              loading={ai.loading}
+              error={ai.error}
+              recommendation={ai.recommendation}
+              evidence={ai.evidence}
+            />
+          </div>
+
+          <div className="mt-4">
+            <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Recommended action</div>
             <ul className="mt-1.5 flex flex-col gap-1.5">
               {recommendation.actions.map((action, i) => (
-                <li key={i} className="rounded-md border border-blue-200 bg-blue-50 p-2 text-sm text-blue-900">
+                <li key={i} className="rounded-2xl border border-blue-100 bg-blue-50 p-2.5 text-sm text-blue-900">
                   {action}
                 </li>
               ))}
@@ -209,27 +252,23 @@ function ResultCard({
 
           {data.observation.timeseries.length > 0 && (
             <div className="mt-4">
-              <div className="text-xs font-semibold uppercase tracking-wide text-zinc-400">NDVI — last 90 days</div>
-              <div className="mt-1 rounded-md border border-zinc-200 bg-white p-2">
+              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">NDVI — last 90 days</div>
+              <div className="mt-1 rounded-2xl border border-zinc-200 bg-white p-2">
                 <NdviChart data={data.observation.timeseries} />
               </div>
             </div>
           )}
+
+          <div className="mt-3 flex justify-center">
+            <span className="text-xs text-zinc-400">{plot.label} · {recommendation.areaHectares.toFixed(1)} ha</span>
+          </div>
         </div>
       )}
     </li>
   );
 }
 
-export default function ResultsPanel({
-  plots,
-  onRefreshPlot,
-}: {
-  plots: Plot[];
-  onRefreshPlot: (id: string) => void;
-}) {
-  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
-
+export default function ResultsPanel({ plots, onRefreshPlot }: { plots: Plot[]; onRefreshPlot: (id: string) => void }) {
   const readyPlots = plots.filter((p) => p.data !== null);
   const pendingPlots = plots.filter((p) => p.status === "loading" && !p.data);
   const errorPlots = plots.filter((p) => p.status === "error" && !p.data);
@@ -238,17 +277,12 @@ export default function ResultsPanel({
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
   return (
-    <div className="h-full overflow-y-auto p-8">
-      <header className="flex items-start justify-between">
-        <div>
-          <h1 className="font-serif text-3xl text-zinc-900">Results</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {today} · {plots.length} plot{plots.length === 1 ? "" : "s"} tracked
-          </p>
-        </div>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-700 text-xs font-semibold text-white">
-          VX
-        </div>
+    <div className="h-full overflow-y-auto bg-[#f7f3ea] p-8">
+      <header>
+        <h1 className="font-serif text-3xl text-zinc-900">Results</h1>
+        <p className="mt-1 text-sm text-zinc-500">
+          {today} · {plots.length} plot{plots.length === 1 ? "" : "s"} tracked
+        </p>
       </header>
 
       <div className="mt-5">
@@ -257,35 +291,26 @@ export default function ResultsPanel({
 
       <div className="mt-6">
         {plots.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
+          <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500">
             No plots yet. Draw a bounding box on the Field input tab to start tracking a field.
           </div>
         ) : (
-          <ul className="flex flex-col gap-3">
-            {ranked.map(({ plot, recommendation }, i) => (
-              <ResultCard
-                key={plot.id}
-                rank={i + 1}
-                plot={plot}
-                data={plot.data!}
-                recommendation={recommendation}
-                expanded={overrides[plot.id] ?? i === 0}
-                onToggle={() => setOverrides((o) => ({ ...o, [plot.id]: !(o[plot.id] ?? i === 0) }))}
-                onRefresh={() => onRefreshPlot(plot.id)}
-              />
+          <ul className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {ranked.map(({ plot, recommendation }) => (
+              <PlotCard key={plot.id} plot={plot} data={plot.data!} recommendation={recommendation} onRefresh={() => onRefreshPlot(plot.id)} />
             ))}
           </ul>
         )}
 
         {(pendingPlots.length > 0 || errorPlots.length > 0) && (
-          <ul className="mt-3 flex flex-col gap-2">
+          <ul className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
             {pendingPlots.map((plot) => (
-              <li key={plot.id} className="rounded-lg border border-zinc-200 bg-white p-3 text-sm text-zinc-500">
+              <li key={plot.id} className="rounded-2xl border border-zinc-200 bg-white p-3 text-sm text-zinc-500">
                 {plot.label} — loading…
               </li>
             ))}
             {errorPlots.map((plot) => (
-              <li key={plot.id} className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              <li key={plot.id} className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 {plot.label} — {plot.error}
               </li>
             ))}
