@@ -52,7 +52,7 @@ describe("saving a note", () => {
   it("inserts it and clears this week's cached AI recommendation in ONE transaction", async () => {
     const f = fake((sql) => (sql.startsWith("INSERT") ? { rows: [row()] } : { rows: [] }));
     const saved = await new PgNoteStore(f.pool, () => NOW).add(note);
-    assert.deepEqual(f.sqls(), ["BEGIN", "INSERT", "UPDATE", "COMMIT"]);
+    assert.deepEqual(f.sqls(), ["BEGIN", "INSERT", "UPDATE", "SELECT", "COMMIT"], "an action note also looks for its week to link an intervention to");
     const insert = f.calls[1];
     const clear = f.calls[2];
     assert.match(insert.sql, /INSERT INTO field_notes \(field_id, event_type, event_date, detail, raw_transcript, confidence\)/);
@@ -70,6 +70,24 @@ describe("saving a note", () => {
       confidence: 0.9,
       createdAt: "2026-09-19T15:00:01.000Z",
     });
+  });
+
+  it("an action note is linked to that week's stress event as an intervention, in the same transaction", async () => {
+    const f = fake((sql) => {
+      if (sql.startsWith("INSERT INTO field_notes")) return { rows: [row()] };
+      if (sql.startsWith("SELECT id FROM stress_events")) return { rows: [{ id: "se1" }] };
+      return { rows: [] };
+    });
+    await new PgNoteStore(f.pool, () => NOW).add(note);
+    assert.deepEqual(f.sqls(), ["BEGIN", "INSERT", "UPDATE", "SELECT", "INSERT", "COMMIT"]);
+    assert.deepEqual(f.calls[3].params, [FIELD, "2026-09-13"], "the week of the note's own date");
+    assert.deepEqual(f.calls[4].params, ["se1", "irrigated", "irrigated north plot Tuesday", "n1"]);
+  });
+
+  it("a plain observation never creates an intervention", async () => {
+    const f = fake((sql) => (sql.startsWith("INSERT") ? { rows: [row({ event_type: "observation" })] } : { rows: [] }));
+    await new PgNoteStore(f.pool, () => NOW).add({ ...note, eventType: "observation" });
+    assert.deepEqual(f.sqls(), ["BEGIN", "INSERT", "UPDATE", "COMMIT"]);
   });
 
   it("uses the week the note is saved in, whatever day it is", async () => {
