@@ -16,7 +16,7 @@ import type { Bbox } from "@/lib/geo";
 import type { FieldApiResponse, FieldDetails, Plot, SoilType } from "@/lib/types";
 import type { SimulatedMessage } from "@/lib/smsSimulation";
 
-const PLOT_COLORS = ["#2563eb", "#d97706", "#7c3aed", "#059669", "#db2777", "#0891b2"];
+const PLOT_COLORS = ["#ea5b4c", "#b7c14a", "#3a6b35", "#d98b2b", "#7a5c99", "#2f7f86"];
 
 interface FieldRecord {
   id: string;
@@ -265,7 +265,7 @@ export default function FarmOSApp() {
   }
 
   return (
-    <div className="flex h-dvh w-screen overflow-hidden bg-[#f7f3ea]">
+    <div className="flex h-dvh w-screen overflow-hidden bg-cream">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} plots={plots} phone={phone} onSwitchNumber={handleSwitchNumber} />
       <main className="relative h-full min-h-0 min-w-0 flex-1 overflow-hidden">
         {getReplayDate() && (

@@ -57,19 +57,19 @@ export default function LocationSearchBar({
           onFocus={() => results.length > 0 && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           placeholder="Search for a place…"
-          className="w-full rounded-full border border-zinc-200 bg-white py-2.5 pl-9 pr-4 text-sm text-zinc-700 shadow-sm outline-none placeholder:text-zinc-400 focus:border-green-400"
+          className="w-full border border-zinc-200 bg-white/95 py-2.5 pl-9 pr-4 text-xs text-olive shadow-md outline-none placeholder:text-zinc-400 focus:border-olive"
         />
         {loading && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-zinc-400">…</span>}
       </div>
       {open && results.length > 0 && (
-        <ul className="absolute mt-1.5 w-full overflow-hidden rounded-2xl border border-zinc-100 bg-white py-1 shadow-lg">
+        <ul className="absolute mt-1 w-full overflow-hidden border border-zinc-100 bg-white py-1 shadow-lg">
           {results.map((result, i) => (
             <li key={i}>
               <button
                 type="button"
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelect(result)}
-                className="block w-full truncate px-4 py-2 text-left text-sm text-zinc-600 hover:bg-green-50"
+                className="block w-full truncate px-4 py-2 text-left text-xs text-olive hover:bg-lime/30"
               >
                 {result.label}
               </button>

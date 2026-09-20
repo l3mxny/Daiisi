@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Plot } from "@/lib/types";
 import type { NdviTrend, Severity } from "@/lib/stressEvent";
 
@@ -96,6 +97,7 @@ const CELL = { worst: "bg-rose-50 font-semibold text-rose-700", best: "bg-green-
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
 export default function PlotComparison({ plots }: { plots: Array<{ plot: Plot; priority: number }> }) {
+  const [details, setDetails] = useState(false); // the extra columns, hidden until asked for
   const rows = plots
     .filter(({ plot }) => plot.data !== null)
     .sort((a, b) => b.priority - a.priority)
@@ -116,10 +118,20 @@ export default function PlotComparison({ plots }: { plots: Array<{ plot: Plot; p
     <section>
       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="font-serif text-xl text-zinc-900">Compare your plots</h2>
-        <p className="text-xs text-zinc-500">
-          <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700">worst</span>{" "}
-          <span className="rounded bg-green-50 px-1.5 py-0.5 text-green-800">best</span> in each column
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-zinc-500">
+            <span className="rounded bg-rose-50 px-1.5 py-0.5 text-rose-700">worst</span>{" "}
+            <span className="rounded bg-green-50 px-1.5 py-0.5 text-green-800">best</span> in each column
+          </p>
+          <button
+            type="button"
+            onClick={() => setDetails((v) => !v)}
+            aria-expanded={details}
+            className="rounded-full border border-zinc-300 bg-white px-3 py-1 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100"
+          >
+            {details ? "Hide details" : "Show details"}
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-3xl border border-zinc-100 bg-white shadow-sm">
         <table className="w-full border-collapse">
@@ -127,12 +139,16 @@ export default function PlotComparison({ plots }: { plots: Array<{ plot: Plot; p
             <tr className="border-b border-zinc-100">
               <th className={th}>Plot</th>
               <th className={th}>Status</th>
-              <th className={th}>Rain vs crop need</th>
-              <th className={th}>Rain vs usual</th>
-              <th className={th}>Rain next 16d</th>
-              <th className={th}>Hot days (7d)</th>
-              <th className={th}>Crop greenness</th>
               <th className={th}>Why</th>
+              <th className={th}>Rain vs crop need</th>
+              <th className={th}>Crop greenness</th>
+              {details && (
+                <>
+                  <th className={th}>Rain vs usual</th>
+                  <th className={th}>Rain next 16d</th>
+                  <th className={th}>Hot days (7d)</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -144,26 +160,6 @@ export default function PlotComparison({ plots }: { plots: Array<{ plot: Plot; p
                 <td className={td}>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${SEVERITY_BADGE[r.severity]}`}>
                     {SEVERITY_LABEL[r.severity]}
-                  </span>
-                </td>
-                <td className={`${td} ${CELL[rank(r.soilWater, water, true)]}`}>
-                  <div>{pct(r.soilWater)}</div>
-                  <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-zinc-200">
-                    <div
-                      className={`h-full rounded-full ${r.soilWater < 0.4 ? "bg-rose-400" : r.soilWater < 0.75 ? "bg-amber-400" : "bg-green-500"}`}
-                      style={{ width: `${Math.min(100, Math.round(r.soilWater * 100))}%` }}
-                    />
-                  </div>
-                </td>
-                <td className={`${td} ${CELL[rank(r.rainVsNormal, normal, true)]}`}>
-                  {r.rainVsNormal === null ? "n/a" : pct(r.rainVsNormal)}
-                </td>
-                <td className={`${td} ${CELL[rank(r.rainNext16, rain, true)]}`}>{Math.round(r.rainNext16)} mm</td>
-                <td className={`${td} ${CELL[rank(r.heatDays, heat, false)]}`}>{r.heatDays}</td>
-                <td className={`${td} ${CELL[rank(r.ndvi, ndvi, true)]}`}>
-                  {r.ndvi === null ? "no clear view" : r.ndvi.toFixed(2)}{" "}
-                  <span className="text-xs text-zinc-500">
-                    {TREND[r.trend].arrow} {TREND[r.trend].label}
                   </span>
                 </td>
                 <td className="px-3 py-2.5 text-xs text-zinc-600">
@@ -179,6 +175,30 @@ export default function PlotComparison({ plots }: { plots: Array<{ plot: Plot; p
                     </div>
                   )}
                 </td>
+                <td className={`${td} ${CELL[rank(r.soilWater, water, true)]}`}>
+                  <div>{pct(r.soilWater)}</div>
+                  <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-zinc-200">
+                    <div
+                      className={`h-full rounded-full ${r.soilWater < 0.4 ? "bg-rose-400" : r.soilWater < 0.75 ? "bg-amber-400" : "bg-green-500"}`}
+                      style={{ width: `${Math.min(100, Math.round(r.soilWater * 100))}%` }}
+                    />
+                  </div>
+                </td>
+                <td className={`${td} ${CELL[rank(r.ndvi, ndvi, true)]}`}>
+                  {r.ndvi === null ? "no clear view" : r.ndvi.toFixed(2)}{" "}
+                  <span className="text-xs text-zinc-500">
+                    {TREND[r.trend].arrow} {TREND[r.trend].label}
+                  </span>
+                </td>
+                {details && (
+                  <>
+                    <td className={`${td} ${CELL[rank(r.rainVsNormal, normal, true)]}`}>
+                      {r.rainVsNormal === null ? "n/a" : pct(r.rainVsNormal)}
+                    </td>
+                    <td className={`${td} ${CELL[rank(r.rainNext16, rain, true)]}`}>{Math.round(r.rainNext16)} mm</td>
+                    <td className={`${td} ${CELL[rank(r.heatDays, heat, false)]}`}>{r.heatDays}</td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
