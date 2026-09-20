@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import FieldNotes from "./FieldNotes";
 import NdviChart from "./NdviChart";
 import type { FieldApiResponse, Plot } from "@/lib/types";
 import type { Severity } from "@/lib/stressEvent";
@@ -107,6 +108,7 @@ function ResultCard({
   expanded,
   onToggle,
   onRefresh,
+  fieldChoices,
 }: {
   rank: number;
   plot: Plot;
@@ -115,6 +117,7 @@ function ResultCard({
   expanded: boolean;
   onToggle: () => void;
   onRefresh: () => void;
+  fieldChoices: Array<{ id: string; label: string }>;
 }) {
   const severity = data.stressEvent.severity;
   const stat = statFor(recommendation, data);
@@ -210,6 +213,8 @@ function ResultCard({
               </div>
             </div>
           )}
+
+          <FieldNotes fieldId={plot.id} fieldLabel={plot.label} fieldChoices={fieldChoices} />
         </div>
       )}
     </li>
@@ -229,6 +234,7 @@ export default function ResultsPanel({
   const pendingPlots = plots.filter((p) => p.status === "loading" && !p.data);
   const errorPlots = plots.filter((p) => p.status === "error" && !p.data);
   const ranked = rankPlots(plots);
+  const fieldChoices = plots.map((p) => ({ id: p.id, label: p.label })); // so a voice note can name a different field
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
@@ -267,6 +273,7 @@ export default function ResultsPanel({
                 expanded={overrides[plot.id] ?? i === 0}
                 onToggle={() => setOverrides((o) => ({ ...o, [plot.id]: !(o[plot.id] ?? i === 0) }))}
                 onRefresh={() => onRefreshPlot(plot.id)}
+                fieldChoices={fieldChoices}
               />
             ))}
           </ul>
