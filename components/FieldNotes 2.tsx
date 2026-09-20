@@ -7,7 +7,7 @@ import { captureDate, toIso } from "@/lib/noteDates";
 import type { FieldRef, ParsedNote } from "@/lib/noteTypes";
 
 // Optional voice notes for one field. Nothing here runs, and the microphone is never touched, until the
-// farmer clicks "Record intervention" and then presses Record:
+// farmer clicks "Additional information" and then presses Record:
 //   - no getUserMedia() on page load or when the panel opens; the browser's permission prompt appears on
 //     the first Record press, tied to something the farmer deliberately did
 //   - recording ends on a second click or at MAX_SECONDS, whichever comes first
@@ -64,17 +64,7 @@ function localFallback(fieldId: string, transcript: string, capture: { at: strin
   };
 }
 
-export default function FieldNotes({
-  fieldId,
-  fieldLabel,
-  fieldChoices,
-  onNotesChanged,
-}: {
-  fieldId: string;
-  fieldLabel: string;
-  fieldChoices: FieldRef[];
-  onNotesChanged?: () => void; // called after a note is saved or deleted, so the AI recommendation can refresh
-}) {
+export default function FieldNotes({ fieldId, fieldLabel, fieldChoices }: { fieldId: string; fieldLabel: string; fieldChoices: FieldRef[] }) {
   const panelId = useId();
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -242,7 +232,6 @@ export default function FieldNotes({
       setPhase("idle");
       setSavedMessage(`Saved to ${target}.`);
       setRefreshKey((n) => n + 1);
-      onNotesChanged?.();
     } catch (err) {
       setSaving(false);
       setSaveError(err instanceof Error ? err.message : "Couldn't save the note. Try again.");
@@ -341,7 +330,7 @@ export default function FieldNotes({
         aria-controls={panelId}
         className="rounded-full border border-zinc-300 bg-white px-4 py-1.5 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-100"
       >
-        Record intervention
+        Additional information
       </button>
 
       {open && (
@@ -349,8 +338,7 @@ export default function FieldNotes({
           <h3 className="font-serif text-lg text-zinc-900">Voice note for {fieldLabel}</h3>
           <p className="mt-1 text-xs text-zinc-500">
             Optional. The microphone stays off until you press Record. Your audio is sent to Deepgram to be turned into text,
-            and the audio itself is not saved. A note you save is kept with this field and shown to the AI that writes its
-            recommendation.
+            and the audio itself is not saved.
           </p>
 
           <div className="mt-3" role="status" aria-live="polite" data-testid="mic-status">
@@ -456,7 +444,7 @@ export default function FieldNotes({
             </p>
           )}
 
-          <SavedNotes fieldId={fieldId} refreshKey={refreshKey} onDeleted={onNotesChanged} />
+          <SavedNotes fieldId={fieldId} refreshKey={refreshKey} />
         </div>
       )}
     </div>

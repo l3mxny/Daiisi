@@ -5,16 +5,14 @@ import Sidebar, { type TabId } from "./Sidebar";
 import FieldInputPanel from "./FieldInputPanel";
 import ResultsPanel from "./ResultsPanel";
 import PhoneSignIn from "./PhoneSignIn";
-import TextPreviewPanel from "./TextPreviewPanel";
 import type { MapMode } from "./MapModeControls";
 import type { FlyTarget } from "./FieldMap";
 import type { FieldDetailsPatch } from "./FieldSidebar";
 import { getCurrentLocation } from "@/lib/geoLocation";
 import { getReplayDate } from "@/lib/replay";
 import { getStoredPhone, setStoredPhone, clearStoredPhone } from "@/lib/phoneSession";
-import type { Bbox } from "@/lib/geo";
+import { bboxCentroid, type Bbox } from "@/lib/geo";
 import type { FieldApiResponse, FieldDetails, Plot, SoilType } from "@/lib/types";
-import type { SimulatedMessage } from "@/lib/smsSimulation";
 
 const PLOT_COLORS = ["#ea5b4c", "#b7c14a", "#3a6b35", "#d98b2b", "#7a5c99", "#2f7f86"];
 
@@ -53,7 +51,6 @@ export default function FarmOSApp() {
   const [flyTo, setFlyTo] = useState<FlyTarget | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [outbox, setOutbox] = useState<SimulatedMessage[]>([]);
 
   // Restores a returning farmer's session from localStorage — this is what
   // makes their fields survive a refresh instead of resetting every time.
@@ -136,6 +133,17 @@ export default function FarmOSApp() {
 
   function handleSelectSearchLocation(loc: { lat: number; lng: number }) {
     setFlyTo({ lat: loc.lat, lng: loc.lng, zoom: 15 });
+  }
+
+  // Clicking a saved field in the sidebar list both selects it and flies the
+  // map to it — separate from onSelectPlot (used when clicking a rectangle
+  // already visible on the map), which shouldn't also trigger a fly-to.
+  function handleFocusPlot(id: string) {
+    const plot = plots.find((p) => p.id === id);
+    if (!plot) return;
+    setSelectedPlotId(id);
+    const [lat, lng] = bboxCentroid(plot.bbox);
+    setFlyTo({ lat, lng, zoom: 17 });
   }
 
   async function fetchPlotStats(id: string, bbox: Bbox) {
@@ -285,6 +293,7 @@ export default function FarmOSApp() {
             onFlyToHandled={() => setFlyTo(null)}
             onNdviOpacityChange={setNdviOpacity}
             onSelectPlot={setSelectedPlotId}
+            onFocusPlot={handleFocusPlot}
             onMapModeChange={setMapMode}
             onDrawComplete={handleDrawComplete}
             onBboxEdit={handleBboxEdit}
@@ -299,7 +308,6 @@ export default function FarmOSApp() {
         {activeTab === "results" && (
           <ResultsPanel plots={plots.filter((p) => p.saved)} onRefreshPlot={handleRefreshPlot} />
         )}
-        {activeTab === "text" && <TextPreviewPanel plots={plots} outbox={outbox} onOutboxChange={setOutbox} />}
       </main>
     </div>
   );

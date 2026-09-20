@@ -5,7 +5,6 @@ import FieldNotes from "./FieldNotes";
 import NdviChart from "./NdviChart";
 import AiRecommendation from "./AiRecommendation";
 import SpeakButton from "./SpeakButton";
-import PlotComparison from "./PlotComparison";
 import { useAiRecommendation } from "@/lib/ai/useAiRecommendation";
 import type { FieldApiResponse, Plot } from "@/lib/types";
 import type { Severity } from "@/lib/stressEvent";
@@ -43,6 +42,44 @@ function rankPlots(plots: Plot[]): Array<{ plot: Plot; recommendation: PlotRecom
     .sort((a, b) => b.recommendation.priorityScore - a.recommendation.priorityScore);
 }
 
+function PlantIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 17.5V10" />
+      <path d="M10 10C10 6.5 7 5 4.5 5c0 3.5 2.5 5 5.5 5z" />
+      <path d="M10 8c0-3 2.5-4.5 5.5-4.5C15.5 6.8 13.2 8.5 10 8z" />
+    </svg>
+  );
+}
+
+function RainIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 8.5a3.5 3.5 0 010-7 4 4 0 017.6 1.3A3.25 3.25 0 0116.5 8.5z" />
+      <path d="M6.5 12l-1 2.5M10 12l-1 2.5M13.5 12l-1 2.5" />
+    </svg>
+  );
+}
+
+function SunIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10" cy="10" r="3.5" />
+      <path d="M10 2.5v2M10 15.5v2M17.5 10h-2M4.5 10h-2M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4M15.3 15.3l-1.4-1.4M6.1 6.1L4.7 4.7" />
+    </svg>
+  );
+}
+
+function WarningIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 20 20" className={className} fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3.5l7.5 13h-15z" strokeLinejoin="round" />
+      <path d="M10 8.3v3.4" />
+      <circle cx="10" cy="14.3" r="0.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function SummaryTiles({ readyPlots }: { readyPlots: Plot[] }) {
   const n = readyPlots.length;
   if (n === 0) return null;
@@ -57,18 +94,21 @@ function SummaryTiles({ readyPlots }: { readyPlots: Plot[] }) {
   const needAttention = readyPlots.filter((p) => p.data!.stressEvent.severity !== "ok").length;
 
   const tiles = [
-    { label: "Crop water need met by rain (30d)", value: spread(readyPlots.map((p) => p.data!.weather.waterRatio * 100), "%") },
-    { label: "Rain in next 16 days", value: spread(readyPlots.map((p) => p.data!.weather.forecastRain16), " mm") },
-    { label: "Most hot days (7d, >32°C)", value: String(maxHeatDays) },
-    { label: "Fields need you", value: `${needAttention} of ${n}` },
+    { label: "Crop water need met by rain (30d)", value: spread(readyPlots.map((p) => p.data!.weather.waterRatio * 100), "%"), Icon: PlantIcon },
+    { label: "Rain in next 16 days", value: spread(readyPlots.map((p) => p.data!.weather.forecastRain16), " mm"), Icon: RainIcon },
+    { label: "Most hot days (7d, >32°C)", value: String(maxHeatDays), Icon: SunIcon },
+    { label: "Fields need you", value: `${needAttention} of ${n}`, Icon: WarningIcon },
   ];
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
       {tiles.map((t) => (
-        <div key={t.label} className="rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-sm">
-          <div className="font-serif text-2xl text-zinc-900">{t.value}</div>
-          <div className="text-xs text-zinc-500">{t.label}</div>
+        <div key={t.label} className="flex items-center gap-3 rounded-2xl border border-zinc-100 bg-white px-4 py-3 shadow-sm">
+          {t.Icon && <t.Icon className="h-9 w-9 shrink-0 text-zinc-400" />}
+          <div>
+            <div className="font-serif text-2xl text-zinc-900">{t.value}</div>
+            <div className="text-xs text-zinc-500">{t.label}</div>
+          </div>
         </div>
       ))}
     </div>
@@ -270,10 +310,6 @@ export default function ResultsPanel({ plots, onRefreshPlot }: { plots: Plot[]; 
 
       <div className="mt-5">
         <SummaryTiles readyPlots={readyPlots} />
-      </div>
-
-      <div className="mt-6">
-        <PlotComparison plots={ranked.map(({ plot, recommendation }) => ({ plot, priority: recommendation.priorityScore }))} />
       </div>
 
       <div className="mt-6">

@@ -5,7 +5,6 @@ export interface InterventionRow {
   stressEventId: string;
   action: string;
   notes: string | null;
-  noteId: string | null; // the field_notes row this came from, when logged by voice note rather than the (removed) manual logger
   loggedAt: string;
 }
 
@@ -14,7 +13,6 @@ function toInterventionRow(row: {
   stress_event_id: string;
   action: string;
   notes: string | null;
-  note_id: string | null;
   logged_at: string;
 }): InterventionRow {
   return {
@@ -22,7 +20,6 @@ function toInterventionRow(row: {
     stressEventId: row.stress_event_id,
     action: row.action,
     notes: row.notes,
-    noteId: row.note_id,
     loggedAt: row.logged_at,
   };
 }
@@ -31,12 +28,11 @@ export async function createIntervention(input: {
   stressEventId: string;
   action: string;
   notes: string | null;
-  noteId?: string | null;
 }): Promise<InterventionRow> {
   const db = getDb();
   const { rows } = await db.query(
-    `INSERT INTO interventions (stress_event_id, action, notes, note_id) VALUES ($1, $2, $3, $4) RETURNING *`,
-    [input.stressEventId, input.action, input.notes, input.noteId ?? null]
+    `INSERT INTO interventions (stress_event_id, action, notes) VALUES ($1, $2, $3) RETURNING *`,
+    [input.stressEventId, input.action, input.notes]
   );
   return toInterventionRow(rows[0]);
 }

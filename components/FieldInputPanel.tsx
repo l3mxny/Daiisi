@@ -23,6 +23,7 @@ export default function FieldInputPanel({
   onFlyToHandled,
   onNdviOpacityChange,
   onSelectPlot,
+  onFocusPlot,
   onMapModeChange,
   onDrawComplete,
   onBboxEdit,
@@ -43,6 +44,7 @@ export default function FieldInputPanel({
   onFlyToHandled: () => void;
   onNdviOpacityChange: (v: number) => void;
   onSelectPlot: (id: string) => void;
+  onFocusPlot: (id: string) => void;
   onMapModeChange: (mode: MapMode) => void;
   onDrawComplete: (bbox: Bbox) => void;
   onBboxEdit: (id: string, bbox: Bbox) => void;
@@ -149,7 +151,7 @@ export default function FieldInputPanel({
       <FieldSidebar
         plots={plots}
         selectedPlotId={selectedPlotId}
-        onSelectPlot={onSelectPlot}
+        onSelectPlot={onFocusPlot}
         onRemovePlot={onRemovePlot}
         onUpdateDetails={onUpdateDetails}
         onSaveField={onSaveField}
