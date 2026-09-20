@@ -54,32 +54,6 @@ async function clearCachedRecommendation(client: Queryable, fieldId: string, now
   );
 }
 
-// A note that's an actual action ("irrigated", "sprayed", ...) rather than a
-// plain "observation" becomes part of the memory graph too: an intervention
-// row linked to whichever week's stress event it happened during (by the
-// note's own event_date, not today — a farmer can log something after the
-// fact). Silently skipped if that week's stress event hasn't been computed
-// yet — there's nothing to link to, and this never blocks saving the note.
-// db/outcomes.ts's evaluatePendingOutcome already reads this table, so the
-// outcome-tracking loop picks these up with no other changes.
-async function linkInterventionIfActionable(client: Queryable, note: NewNote, noteId: string): Promise<void> {
-  if (note.eventType === "observation") return;
-
-  const eventWeekStart = getWeekStart(new Date(`${note.eventDate}T00:00:00Z`));
-  const { rows } = await client.query<{ id: string }>(
-    "SELECT id FROM stress_events WHERE field_id = $1 AND week_start = $2",
-    [note.fieldId, eventWeekStart]
-  );
-  if (!rows[0]) return;
-
-  await client.query(
-    `INSERT INTO interventions (stress_event_id, action, notes, note_id)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (note_id) DO NOTHING`,
-    [rows[0].id, note.eventType, note.detail, noteId]
-  );
-}
-
 export class PgNoteStore implements NoteStore {
   constructor(
     private readonly pool: () => PoolLike = getDb,
@@ -113,10 +87,8 @@ export class PgNoteStore implements NoteStore {
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
         [note.fieldId, note.eventType, note.eventDate, note.detail, note.rawTranscript, note.confidence]
       );
-      const stored = rows[0];
       await clearCachedRecommendation(client, note.fieldId, this.clock());
-      await linkInterventionIfActionable(client, note, stored.id);
-      return toStored(stored);
+      return toStored(rows[0]);
     });
   }
 

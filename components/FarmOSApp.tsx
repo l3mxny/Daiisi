@@ -5,7 +5,6 @@ import Sidebar, { type TabId } from "./Sidebar";
 import FieldInputPanel from "./FieldInputPanel";
 import ResultsPanel from "./ResultsPanel";
 import PhoneSignIn from "./PhoneSignIn";
-import TextPreviewPanel from "./TextPreviewPanel";
 import type { MapMode } from "./MapModeControls";
 import type { FlyTarget } from "./FieldMap";
 import type { FieldDetailsPatch } from "./FieldSidebar";
@@ -14,7 +13,6 @@ import { getReplayDate } from "@/lib/replay";
 import { getStoredPhone, setStoredPhone, clearStoredPhone } from "@/lib/phoneSession";
 import type { Bbox } from "@/lib/geo";
 import type { FieldApiResponse, FieldDetails, Plot, SoilType } from "@/lib/types";
-import type { SimulatedMessage } from "@/lib/smsSimulation";
 
 const PLOT_COLORS = ["#ea5b4c", "#b7c14a", "#3a6b35", "#d98b2b", "#7a5c99", "#2f7f86"];
 
@@ -53,7 +51,6 @@ export default function FarmOSApp() {
   const [flyTo, setFlyTo] = useState<FlyTarget | null>(null);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [outbox, setOutbox] = useState<SimulatedMessage[]>([]);
 
   // Restores a returning farmer's session from localStorage — this is what
   // makes their fields survive a refresh instead of resetting every time.
@@ -299,7 +296,6 @@ export default function FarmOSApp() {
         {activeTab === "results" && (
           <ResultsPanel plots={plots.filter((p) => p.saved)} onRefreshPlot={handleRefreshPlot} />
         )}
-        {activeTab === "text" && <TextPreviewPanel plots={plots} outbox={outbox} onOutboxChange={setOutbox} />}
       </main>
     </div>
   );

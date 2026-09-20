@@ -4,12 +4,11 @@ import LanguagePicker from "./LanguagePicker";
 import Logo from "./Logo";
 import type { Plot } from "@/lib/types";
 
-export type TabId = "input" | "results" | "text";
+export type TabId = "input" | "results";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "input", label: "My fields" },
   { id: "results", label: "My results" },
-  { id: "text", label: "SMS updates" },
 ];
 
 function TabIcon({ id }: { id: TabId }) {
@@ -22,16 +21,9 @@ function TabIcon({ id }: { id: TabId }) {
       </svg>
     );
   }
-  if (id === "results") {
-    return (
-      <svg {...common}>
-        <path d="M4.5 16.5V10M10 16.5V4.5M15.5 16.5V8" />
-      </svg>
-    );
-  }
   return (
     <svg {...common}>
-      <path d="M3.5 4.5h13v9h-7l-3.5 3v-3h-3z" />
+      <path d="M4.5 16.5V10M10 16.5V4.5M15.5 16.5V8" />
     </svg>
   );
 }
