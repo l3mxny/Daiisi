@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Bbox } from "@/lib/geo";
 import { bboxCentroid, bboxFromPoint } from "@/lib/geo";
-import { computeFieldSnapshot } from "@/lib/fieldSnapshot";
+import { getCachedSnapshot } from "@/lib/snapshotCache";
 import { getFieldById } from "@/db/fields";
 import { recordStressEvent } from "@/db/stressEvents";
 import { evaluatePendingOutcome } from "@/db/outcomes";
 import { getWeekStart } from "@/lib/week";
 import type { FieldApiResponse } from "@/lib/types";
+
+// Satellite, weather and AI calls can be slow on a cold start; Vercel cuts a function off at this many seconds.
+export const maxDuration = 60;
 
 function isValidBbox(value: unknown): value is Bbox {
   return (
@@ -52,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   let snapshot;
   try {
-    snapshot = await computeFieldSnapshot(bbox, { withImages: true, asOf });
+    snapshot = await getCachedSnapshot(bbox, { withImages: true, asOf, fresh: body?.refresh === true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/field] weather request failed:", message);

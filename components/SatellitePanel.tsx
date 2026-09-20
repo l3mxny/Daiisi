@@ -82,7 +82,7 @@ export default function SatellitePanel({ plots, digest }: { plots: Plot[]; diges
 
   return (
     <section>
-      <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">What the satellite saw</div>
+      <h2 className="font-[family-name:var(--font-display)] text-xl font-bold tracking-tight text-olive uppercase">What the satellite saw</h2>
       <p className="mt-1 max-w-2xl text-sm text-zinc-500">
         The most recent clear picture of each field side by side, in the same order as the text. A lack of rain can&apos;t be seen from
         space, so these show how the crops are responding.
@@ -97,8 +97,8 @@ export default function SatellitePanel({ plots, digest }: { plots: Plot[]; diges
       </div>
 
       {/* One column per plot so the pictures line up: compare photos, greenness maps and reasons across. */}
-      <div className="mt-4 overflow-x-auto pb-2">
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${ordered.length}, minmax(11rem, 1fr))` }}>
+      <div className="mt-4">
+        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(21rem, 26rem))" }}>
           {ordered.map((plot) => {
             const data = plot.data!;
             const obs = data.observation;
@@ -126,8 +126,10 @@ export default function SatellitePanel({ plots, digest }: { plots: Plot[]; diges
                   </div>
                 )}
 
-                <Picture src={obs.trueColorImage} alt={`${plot.label}: satellite photo`} label="Photo (true color)" />
-                <Picture src={obs.ndviImage} alt={`${plot.label}: crop greenness map`} label="Crop greenness map" />
+                <div className="grid grid-cols-2 gap-2">
+                  <Picture src={obs.trueColorImage} alt={`${plot.label}: satellite photo`} label="Photo (true color)" />
+                  <Picture src={obs.ndviImage} alt={`${plot.label}: crop greenness map`} label="Crop greenness map" />
+                </div>
 
                 <div className={`rounded-md px-2 py-1 text-xs ${RANK_STYLE[rank]}`}>
                   Greenness index{" "}

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { generateAiRecommendation } from "@/lib/ai/recommendation";
 import { retrieveSimilarEvents } from "@/lib/retrieval";
 
+// Satellite, weather and AI calls can be slow on a cold start; Vercel cuts a function off at this many seconds.
+export const maxDuration = 60;
+
 export async function GET(_req: Request, ctx: RouteContext<"/api/stress-events/[id]/recommendation">) {
   const { id } = await ctx.params;
   try {

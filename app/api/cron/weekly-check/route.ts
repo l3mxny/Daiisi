@@ -9,16 +9,15 @@ import { composeDigest, type DigestPlotInput } from "@/lib/smsDigest";
 import { sendSms, toE164US } from "@/lib/sms";
 import { bboxCentroid } from "@/lib/geo";
 import type { FieldApiResponse } from "@/lib/types";
+import { isCronAuthorized } from "@/lib/cronAuth";
 
-// Vercel Cron calls this on a schedule (see vercel.ts). Guarded by
-// CRON_SECRET so it can't be triggered by an arbitrary request — Vercel
-// Cron sends it as a bearer token automatically once the env var is set.
+// Vercel Cron calls this on a schedule (see vercel.ts). It only runs for a caller that presents CRON_SECRET (Vercel
+// Cron sends it as a bearer token once the env var is set); with no secret configured it refuses everyone outside
+// `next dev`. See lib/cronAuth.ts.
 // https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs
-function isAuthorized(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return true; // not configured yet (e.g. local dev) — allow
-  return req.headers.get("authorization") === `Bearer ${secret}`;
-}
+
+// The job walks every saved field, so it needs far longer than a normal request.
+export const maxDuration = 300;
 
 interface FieldResult {
   field: FieldRow;
@@ -71,7 +70,10 @@ async function sendDigests(results: FieldResult[]): Promise<Array<{ phone: strin
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
+    if (!process.env.CRON_SECRET && process.env.NODE_ENV !== "development") {
+      console.error("[cron] CRON_SECRET is not set, so the weekly job is refusing every request. Set it in the environment.");
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

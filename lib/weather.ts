@@ -73,6 +73,28 @@ export function parseWeatherMetrics(json: OpenMeteoResponse): WeatherMetrics {
   return { rain30, et030, waterRatio, forecastRain16, daysSinceRain, heatDays7, rain7 };
 }
 
+// Open-Meteo is free and shared, and now and then it stalls or answers with an error page that is not JSON
+// (seen as "Unexpected token 'U', "Unexpected"... is not valid JSON" after a 30-60 s wait). Give each try a
+// deadline and try again a couple of times before calling the weather unavailable.
+const ATTEMPTS = 3;
+const ATTEMPT_TIMEOUT_MS = 12_000;
+
+export async function fetchWeatherJson(url: string, fetchImpl: typeof fetch = fetch, retryDelayMs = 500): Promise<OpenMeteoResponse> {
+  let lastError = "no response";
+  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+    try {
+      const res = await fetchImpl(url, { signal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS) });
+      if (res.ok) return (await res.json()) as OpenMeteoResponse;
+      lastError = `status ${res.status}`;
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) break; // our request is wrong; trying again won't help
+    } catch (err) {
+      lastError = err instanceof Error && err.name === "TimeoutError" ? "timed out" : "unreadable response";
+    }
+    if (attempt < ATTEMPTS) await new Promise((r) => setTimeout(r, retryDelayMs * attempt));
+  }
+  throw new Error(`Open-Meteo did not give a usable answer (${lastError})`);
+}
+
 const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
 const DAY_MS = 86_400_000;
 
@@ -92,9 +114,7 @@ async function getReplayWeatherMetrics(lat: number, lng: number, asOf: Date): Pr
   url.searchParams.set("end_date", end.toISOString().slice(0, 10));
   url.searchParams.set("daily", "precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max");
   url.searchParams.set("timezone", "auto");
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`Open-Meteo archive request failed: ${res.status} ${await res.text()}`);
-  return parseWeatherMetrics(await res.json());
+  return parseWeatherMetrics(await fetchWeatherJson(url.toString()));
 }
 
 // No API key, no auth. Throws on any failure — weather has no cloud
@@ -110,10 +130,6 @@ export async function getWeatherMetrics(lat: number, lng: number, asOf?: Date): 
   url.searchParams.set("forecast_days", String(FORECAST_DAYS));
   url.searchParams.set("timezone", "auto");
 
-  const res = await fetch(url.toString());
-  if (!res.ok) {
-    throw new Error(`Open-Meteo request failed: ${res.status} ${await res.text()}`);
-  }
-  const json = await res.json();
+  const json = await fetchWeatherJson(url.toString());
   return parseWeatherMetrics(json);
 }

@@ -11,7 +11,7 @@ import type { FieldDetailsPatch } from "./FieldSidebar";
 import { getCurrentLocation } from "@/lib/geoLocation";
 import { getReplayDate } from "@/lib/replay";
 import { getStoredPhone, setStoredPhone, clearStoredPhone } from "@/lib/phoneSession";
-import { bboxCentroid, type Bbox } from "@/lib/geo";
+import type { Bbox } from "@/lib/geo";
 import type { FieldApiResponse, FieldDetails, Plot, SoilType } from "@/lib/types";
 
 const PLOT_COLORS = ["#ea5b4c", "#b7c14a", "#3a6b35", "#d98b2b", "#7a5c99", "#2f7f86"];
@@ -131,27 +131,16 @@ export default function FarmOSApp() {
       .finally(() => setLocating(false));
   }
 
-  function handleSelectSearchLocation(loc: { lat: number; lng: number }) {
-    setFlyTo({ lat: loc.lat, lng: loc.lng, zoom: 15 });
+  function handleSelectSearchLocation(loc: { lat: number; lng: number; zoom?: number }) {
+    setFlyTo({ lat: loc.lat, lng: loc.lng, zoom: loc.zoom ?? 15 });
   }
 
-  // Clicking a saved field in the sidebar list both selects it and flies the
-  // map to it — separate from onSelectPlot (used when clicking a rectangle
-  // already visible on the map), which shouldn't also trigger a fly-to.
-  function handleFocusPlot(id: string) {
-    const plot = plots.find((p) => p.id === id);
-    if (!plot) return;
-    setSelectedPlotId(id);
-    const [lat, lng] = bboxCentroid(plot.bbox);
-    setFlyTo({ lat, lng, zoom: 17 });
-  }
-
-  async function fetchPlotStats(id: string, bbox: Bbox) {
+  async function fetchPlotStats(id: string, bbox: Bbox, refresh = false) {
     try {
       const res = await fetch("/api/field", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bbox, fieldId: id, asOf: getReplayDate() }),
+        body: JSON.stringify({ bbox, fieldId: id, asOf: getReplayDate(), refresh }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -261,7 +250,7 @@ export default function FarmOSApp() {
     const plot = plots.find((p) => p.id === id);
     if (!plot) return;
     setPlots((prev) => prev.map((p) => (p.id === id ? { ...p, status: "loading", error: null } : p)));
-    fetchPlotStats(id, plot.bbox);
+    fetchPlotStats(id, plot.bbox, true); // Refresh always asks for new data, not the saved copy
   }
 
   if (initializing) {
@@ -293,7 +282,6 @@ export default function FarmOSApp() {
             onFlyToHandled={() => setFlyTo(null)}
             onNdviOpacityChange={setNdviOpacity}
             onSelectPlot={setSelectedPlotId}
-            onFocusPlot={handleFocusPlot}
             onMapModeChange={setMapMode}
             onDrawComplete={handleDrawComplete}
             onBboxEdit={handleBboxEdit}

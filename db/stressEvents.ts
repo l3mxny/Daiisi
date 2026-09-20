@@ -107,6 +107,7 @@ export interface StressEventDetail {
   fieldId: string;
   fieldName: string;
   crop: string;
+  plantedOn: string | null; // yyyy-mm-dd, what the farmer entered on the field form
   weekStart: string;
   severity: Severity;
   waterRatio: number | null;
@@ -129,7 +130,7 @@ export interface StressEventDetail {
 export async function getStressEventDetail(id: string): Promise<StressEventDetail | null> {
   const db = getDb();
   const { rows } = await db.query(
-    `SELECT se.*, f.name AS field_name, f.crop
+    `SELECT se.*, f.name AS field_name, f.crop, f.planted_on
      FROM stress_events se JOIN fields f ON f.id = se.field_id
      WHERE se.id = $1`,
     [id]
@@ -141,6 +142,7 @@ export async function getStressEventDetail(id: string): Promise<StressEventDetai
     fieldId: r.field_id,
     fieldName: r.field_name,
     crop: r.crop,
+    plantedOn: r.planted_on instanceof Date ? r.planted_on.toISOString().slice(0, 10) : (r.planted_on ?? null),
     weekStart: r.week_start,
     severity: r.severity,
     waterRatio: r.water_ratio,

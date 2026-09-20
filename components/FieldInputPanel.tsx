@@ -23,7 +23,6 @@ export default function FieldInputPanel({
   onFlyToHandled,
   onNdviOpacityChange,
   onSelectPlot,
-  onFocusPlot,
   onMapModeChange,
   onDrawComplete,
   onBboxEdit,
@@ -44,12 +43,11 @@ export default function FieldInputPanel({
   onFlyToHandled: () => void;
   onNdviOpacityChange: (v: number) => void;
   onSelectPlot: (id: string) => void;
-  onFocusPlot: (id: string) => void;
   onMapModeChange: (mode: MapMode) => void;
   onDrawComplete: (bbox: Bbox) => void;
   onBboxEdit: (id: string, bbox: Bbox) => void;
   onFindLocation: () => void;
-  onSelectSearchLocation: (loc: { lat: number; lng: number }) => void;
+  onSelectSearchLocation: (loc: { lat: number; lng: number; zoom?: number }) => void;
   onNewField: () => void;
   onUpdateDetails: (id: string, patch: FieldDetailsPatch) => void;
   onSaveField: (id: string) => void;
@@ -58,6 +56,17 @@ export default function FieldInputPanel({
   const selectedPlot = plots.find((p) => p.id === selectedPlotId) ?? null;
   const draft = plots.find((p) => !p.saved) ?? null;
   const hasDraft = draft !== null;
+
+  // Picking a saved field in the list also takes the map there, zoomed so the field fills a good part of the view.
+  function focusPlot(id: string) {
+    onSelectPlot(id);
+    const plot = plots.find((p) => p.id === id);
+    if (!plot) return;
+    const [west, south, east, north] = plot.bbox;
+    const span = Math.max(east - west, north - south, 1e-5);
+    const zoom = Math.max(5, Math.min(18, Math.round(Math.log2(371 / span))));
+    onSelectSearchLocation({ lat: (south + north) / 2, lng: (west + east) / 2, zoom });
+  }
 
   return (
     <div className="flex h-full w-full gap-6 overflow-y-auto bg-cream p-8 font-[family-name:var(--font-mono-ui)]">
@@ -151,7 +160,7 @@ export default function FieldInputPanel({
       <FieldSidebar
         plots={plots}
         selectedPlotId={selectedPlotId}
-        onSelectPlot={onFocusPlot}
+        onSelectPlot={focusPlot}
         onRemovePlot={onRemovePlot}
         onUpdateDetails={onUpdateDetails}
         onSaveField={onSaveField}

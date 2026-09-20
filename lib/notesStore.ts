@@ -87,9 +87,14 @@ let store: NoteStore | null = null;
 
 export function getNoteStore(): NoteStore {
   if (!store) {
-    store = process.env.DATABASE_URL
-      ? new PgNoteStore()
-      : new JsonFileNoteStore(process.env.NOTES_FILE ?? path.join(process.cwd(), "data", "notes.json"));
+    if (process.env.DATABASE_URL) {
+      store = new PgNoteStore();
+    } else if (process.env.VERCEL) {
+      // A function's disk is temporary on Vercel, so a JSON file would "save" notes and then lose them. Refuse instead.
+      throw new StorageUnavailableError("Notes need a database: DATABASE_URL is not set on this deployment.");
+    } else {
+      store = new JsonFileNoteStore(process.env.NOTES_FILE ?? path.join(process.cwd(), "data", "notes.json"));
+    }
   }
   return store;
 }

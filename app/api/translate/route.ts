@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Satellite, weather and AI calls can be slow on a cold start; Vercel cuts a function off at this many seconds.
+export const maxDuration = 30;
+
 const GOOGLE_TRANSLATE_URL = "https://translation.googleapis.com/language/translate/v2";
 
 // Only the languages the picker offers; anything else is rejected before it can cost money.
