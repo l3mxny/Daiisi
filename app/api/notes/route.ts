@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getNoteStore, StorageUnavailableError } from "@/lib/notesStore";
+import { FieldNotFoundError, getNoteStore, StorageUnavailableError } from "@/lib/notesStore";
 import { DATE_RE, isEventType } from "@/lib/noteTypes";
 
 // Saved voice notes.
@@ -25,6 +25,7 @@ function isRealDate(iso: string): boolean {
 
 function storageError(err: unknown) {
   if (err instanceof StorageUnavailableError) return fail(err.message, 503);
+  if (err instanceof FieldNotFoundError) return fail(err.message, 409);
   console.error("[/api/notes] unexpected error:", err instanceof Error ? err.name : "unknown");
   return fail("Something went wrong with the notes.", 500);
 }
@@ -68,7 +69,7 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   if (!id || id.length > MAX_ID_CHARS) return fail("id is required.", 400);
   try {
-    return (await getNoteStore().remove(id)) ? NextResponse.json({ deleted: true }) : fail("No such note.", 404);
+    return (await getNoteStore().remove(id)) !== null ? NextResponse.json({ deleted: true }) : fail("No such note.", 404);
   } catch (err) {
     return storageError(err);
   }

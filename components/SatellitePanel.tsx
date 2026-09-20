@@ -3,6 +3,7 @@
 import type { DigestResult } from "@/lib/smsDigest";
 import type { Severity } from "@/lib/stressEvent";
 import type { Plot } from "@/lib/types";
+import { whyFor } from "./PlotComparison";
 
 // The pictures behind the text: the latest clear satellite photo and greenness map
 // for each field, in the same order as the message. Only reads what the app already
@@ -18,6 +19,17 @@ const SEVERITY_LABEL: Record<Severity, string> = { ok: "OK", watch: "WATCH", act
 // The colors the greenness map uses (see NDVI_COLOR_EVALSCRIPT in lib/evalscripts.ts).
 const GREENNESS_GRADIENT =
   "linear-gradient(to right, rgb(139,69,19), rgb(206,184,139), rgb(255,255,191), rgb(217,239,139), rgb(102,189,99), rgb(26,152,80), rgb(0,90,50))";
+
+const RANK_STYLE = { worst: "bg-rose-50 text-rose-700", best: "bg-green-50 text-green-800", "": "bg-zinc-50 text-zinc-600" } as const;
+
+// "worst" / "best" greenness among the plots, only when they actually differ.
+function ndviRank(value: number | null, all: number[]): "worst" | "best" | "" {
+  if (value === null || all.length < 2) return "";
+  const min = Math.min(...all);
+  const max = Math.max(...all);
+  if (min === max) return "";
+  return value === min ? "worst" : value === max ? "best" : "";
+}
 
 function Picture({ src, alt, label }: { src: string | null; alt: string; label: string }) {
   return (
@@ -63,12 +75,16 @@ export default function SatellitePanel({ plots, digest }: { plots: Plot[]; diges
     ...plots.filter((p) => !lineById.has(p.id)),
   ];
   if (ordered.length === 0) return null;
+  const allNdvi = ordered.flatMap((p) => {
+    const o = p.data!.observation;
+    return o.ndviValid && o.ndviMean !== null ? [o.ndviMean] : [];
+  });
 
   return (
     <section>
       <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">What the satellite saw</div>
       <p className="mt-1 max-w-2xl text-sm text-zinc-500">
-        The most recent clear picture of each field, in the same order as the text. A lack of rain can&apos;t be seen from
+        The most recent clear picture of each field side by side, in the same order as the text. A lack of rain can&apos;t be seen from
         space, so these show how the crops are responding.
       </p>
 
@@ -80,56 +96,73 @@ export default function SatellitePanel({ plots, digest }: { plots: Plot[]; diges
         </div>
       </div>
 
-      <ul className="mt-5 flex flex-col gap-5">
-        {ordered.map((plot) => {
-          const data = plot.data!;
-          const obs = data.observation;
-          const line = lineById.get(plot.id);
-          const severity = data.stressEvent.severity;
-          return (
-            <li key={plot.id} className="rounded-xl border border-zinc-200 bg-white p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div translate="no" className="truncate font-serif text-lg text-zinc-900">{plot.label}</div>
-                  <div translate="no" className="truncate font-mono text-sm text-zinc-600">
-                    {line ? (line.shown ? line.text : `${line.text}  (counted in "+more")`) : "Not in the text: nothing to do"}
+      {/* One column per plot so the pictures line up: compare photos, greenness maps and reasons across. */}
+      <div className="mt-4 overflow-x-auto pb-2">
+        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${ordered.length}, minmax(11rem, 1fr))` }}>
+          {ordered.map((plot) => {
+            const data = plot.data!;
+            const obs = data.observation;
+            const line = lineById.get(plot.id);
+            const severity = data.stressEvent.severity;
+            const why = whyFor(plot);
+            const rank = ndviRank(obs.ndviValid ? obs.ndviMean : null, allNdvi);
+            return (
+              <div key={plot.id} className="flex min-w-0 flex-col gap-2 rounded-xl border border-zinc-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div translate="no" className="min-w-0 truncate font-serif text-base text-zinc-900">
+                    {plot.label}
                   </div>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide ${SEVERITY_BADGE[severity]}`}>
+                    {SEVERITY_LABEL[severity]}
+                  </span>
                 </div>
-                <span className={`shrink-0 rounded px-2 py-1 text-[11px] font-semibold tracking-wide ${SEVERITY_BADGE[severity]}`}>
-                  {SEVERITY_LABEL[severity]}
-                </span>
-              </div>
-
-              {data.usedFallback && (
-                <div className="mt-3 rounded-md border border-zinc-300 bg-zinc-50 p-2 text-xs text-zinc-700">
-                  Live satellite access failed, so these are sample pictures, not this field.
+                <div translate="no" className="font-mono text-[11px] leading-snug text-zinc-600">
+                  {line ? (line.shown ? line.text : `${line.text}  (counted in "+more")`) : "Not in the text: nothing to do"}
                 </div>
-              )}
 
-              <div className="mt-3 grid grid-cols-2 gap-3">
+                {data.usedFallback && (
+                  <div className="rounded-md border border-zinc-300 bg-zinc-50 p-1.5 text-[11px] text-zinc-700">
+                    Sample pictures, not this field (live satellite access failed).
+                  </div>
+                )}
+
                 <Picture src={obs.trueColorImage} alt={`${plot.label}: satellite photo`} label="Photo (true color)" />
                 <Picture src={obs.ndviImage} alt={`${plot.label}: crop greenness map`} label="Crop greenness map" />
-              </div>
 
-              <div className="mt-3 text-xs text-zinc-500">
-                {obs.date ? (
-                  <>
-                    Taken {obs.date}
-                    {obs.daysSinceClear !== null
-                      ? ` (${obs.daysSinceClear} day${obs.daysSinceClear === 1 ? "" : "s"} ago)`
-                      : ""}
-                    {obs.cloudCover !== null ? ` · ${Math.round(obs.cloudCover)}% cloud` : ""}
-                    {obs.ndviMean !== null ? ` · greenness index ${obs.ndviMean.toFixed(2)}` : ""}
-                  </>
-                ) : (
-                  "No clear picture in the last 60 days."
-                )}
+                <div className={`rounded-md px-2 py-1 text-xs ${RANK_STYLE[rank]}`}>
+                  Greenness index{" "}
+                  <span className="font-semibold">{obs.ndviValid && obs.ndviMean !== null ? obs.ndviMean.toFixed(2) : "no clear view"}</span>
+                  {rank === "worst" && " · lowest"}
+                  {rank === "best" && " · highest"}
+                </div>
+                <div className="text-[11px] text-zinc-500">
+                  {obs.date ? (
+                    <>
+                      Taken {obs.date}
+                      {obs.daysSinceClear !== null ? ` (${obs.daysSinceClear}d ago)` : ""}
+                      {obs.cloudCover !== null ? ` · ${Math.round(obs.cloudCover)}% cloud` : ""}
+                    </>
+                  ) : (
+                    "No clear picture in the last 60 days."
+                  )}
+                </div>
+                <p className="text-xs text-zinc-700">{cropSentence(plot)}</p>
+                <div className="mt-auto flex flex-wrap gap-1 border-t border-zinc-100 pt-2">
+                  {why.length === 0 ? (
+                    <span className="text-[11px] text-zinc-400">Nothing wrong</span>
+                  ) : (
+                    why.map((w) => (
+                      <span key={w} className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-600">
+                        {w}
+                      </span>
+                    ))
+                  )}
+                </div>
               </div>
-              <p className="mt-1 text-sm text-zinc-700">{cropSentence(plot)}</p>
-            </li>
-          );
-        })}
-      </ul>
+            );
+          })}
+        </div>
+      </div>
     </section>
   );
 }

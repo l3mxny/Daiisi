@@ -14,7 +14,9 @@ export interface AiRecommendationState {
 // stress event. Pulled out of the card UI so it can be called once per card
 // on mount — independent of whether the card is currently hovered or
 // pinned open — so hovering feels instant instead of triggering a fetch.
-export function useAiRecommendation(stressEventId: string | null): AiRecommendationState {
+// `refreshKey` changes when the farmer saves or deletes a voice note: the server clears the cached advice then,
+// so fetching again returns a recommendation that takes the note into account.
+export function useAiRecommendation(stressEventId: string | null, refreshKey = 0): AiRecommendationState {
   const [recommendation, setRecommendation] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<EvidenceCandidate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,10 +30,11 @@ export function useAiRecommendation(stressEventId: string | null): AiRecommendat
         if (!res.ok) throw new Error(json?.error ?? `Request failed: ${res.status}`);
         setRecommendation(json.recommendation);
         setEvidence(Array.isArray(json.evidence) ? json.evidence : []);
+        setError(null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
-  }, [stressEventId]);
+  }, [stressEventId, refreshKey]);
 
   return { recommendation, evidence, loading, error };
 }

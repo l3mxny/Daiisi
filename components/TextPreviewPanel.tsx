@@ -68,7 +68,7 @@ export default function TextPreviewPanel({
   return (
     <div className="h-full overflow-y-auto p-8">
       <header>
-        <h1 className="font-serif text-3xl text-zinc-900">Farmer&apos;s text</h1>
+        <h1 className="font-serif text-3xl text-zinc-900">Text alerts</h1>
         <p className="mt-1 max-w-3xl text-sm text-zinc-500">
           A simulation of the texts an upgraded Twilio account would send, built from the same analysis as the Results
           tab. Nothing leaves this page and no SMS provider is connected.

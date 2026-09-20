@@ -64,7 +64,17 @@ function localFallback(fieldId: string, transcript: string, capture: { at: strin
   };
 }
 
-export default function FieldNotes({ fieldId, fieldLabel, fieldChoices }: { fieldId: string; fieldLabel: string; fieldChoices: FieldRef[] }) {
+export default function FieldNotes({
+  fieldId,
+  fieldLabel,
+  fieldChoices,
+  onNotesChanged,
+}: {
+  fieldId: string;
+  fieldLabel: string;
+  fieldChoices: FieldRef[];
+  onNotesChanged?: () => void; // called after a note is saved or deleted, so the AI recommendation can refresh
+}) {
   const panelId = useId();
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("idle");
@@ -232,6 +242,7 @@ export default function FieldNotes({ fieldId, fieldLabel, fieldChoices }: { fiel
       setPhase("idle");
       setSavedMessage(`Saved to ${target}.`);
       setRefreshKey((n) => n + 1);
+      onNotesChanged?.();
     } catch (err) {
       setSaving(false);
       setSaveError(err instanceof Error ? err.message : "Couldn't save the note. Try again.");
@@ -338,7 +349,8 @@ export default function FieldNotes({ fieldId, fieldLabel, fieldChoices }: { fiel
           <h3 className="font-serif text-lg text-zinc-900">Voice note for {fieldLabel}</h3>
           <p className="mt-1 text-xs text-zinc-500">
             Optional. The microphone stays off until you press Record. Your audio is sent to Deepgram to be turned into text,
-            and the audio itself is not saved.
+            and the audio itself is not saved. A note you save is kept with this field and shown to the AI that writes its
+            recommendation.
           </p>
 
           <div className="mt-3" role="status" aria-live="polite" data-testid="mic-status">
@@ -444,7 +456,7 @@ export default function FieldNotes({ fieldId, fieldLabel, fieldChoices }: { fiel
             </p>
           )}
 
-          <SavedNotes fieldId={fieldId} refreshKey={refreshKey} />
+          <SavedNotes fieldId={fieldId} refreshKey={refreshKey} onDeleted={onNotesChanged} />
         </div>
       )}
     </div>

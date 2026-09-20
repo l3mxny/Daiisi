@@ -1,29 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { PgNoteStore } from "../db/fieldNotes";
+import { StorageUnavailableError, type NoteStore } from "./noteStoreTypes";
 import type { NewNote, StoredNote } from "./noteTypes";
 
-// TEMPORARY notes storage: one JSON file on the local disk, behind a small interface so the real database
-// (Postgres) can replace it by implementing NoteStore, with no other file changing. Same columns as the
-// planned table: id, field_id, event_type, event_date, detail, raw_transcript, confidence, created_at.
-//
-// Limits that come with a file: it only works where the server can write to disk (local development, not
-// a Vercel deployment), and a field's notes are found by its id, which today changes when the page is
-// reloaded because fields are not saved yet. Good for a local demo; not a place to keep real data.
+export { FieldNotFoundError, StorageUnavailableError, type NoteStore } from "./noteStoreTypes";
 
-export interface NoteStore {
-  add(note: NewNote): Promise<StoredNote>;
-  // Notes dated within the last `days` days, most recent first.
-  notesFor(fieldId: string, days: number, now?: Date): Promise<StoredNote[]>;
-  remove(id: string): Promise<boolean>; // false when there was no such note
-}
-
-export class StorageUnavailableError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "StorageUnavailableError";
-  }
-}
+// Where notes are kept. With a database configured (DATABASE_URL) they go to Postgres (db/fieldNotes.ts),
+// where saving or deleting a note also clears that field's cached AI recommendation so the next one sees it.
+// Without a database (a quick local run) they fall back to the small JSON file below, which is only good
+// for a demo: it needs a writable disk (not a Vercel deployment) and has no recommendation to refresh.
 
 export class JsonFileNoteStore implements NoteStore {
   private queue: Promise<unknown> = Promise.resolve();
@@ -85,21 +72,24 @@ export class JsonFileNoteStore implements NoteStore {
     });
   }
 
-  remove(id: string): Promise<boolean> {
+  remove(id: string): Promise<StoredNote | null> {
     return this.run(async () => {
       const notes = await this.readAll();
-      const kept = notes.filter((n) => n.id !== id);
-      if (kept.length === notes.length) return false;
-      await this.writeAll(kept);
-      return true;
+      const removed = notes.find((n) => n.id === id) ?? null;
+      if (!removed) return null;
+      await this.writeAll(notes.filter((n) => n.id !== id));
+      return removed;
     });
   }
 }
 
 let store: NoteStore | null = null;
 
-// The store the app uses. When the database is ready, return its implementation here.
 export function getNoteStore(): NoteStore {
-  if (!store) store = new JsonFileNoteStore(process.env.NOTES_FILE ?? path.join(process.cwd(), "data", "notes.json"));
+  if (!store) {
+    store = process.env.DATABASE_URL
+      ? new PgNoteStore()
+      : new JsonFileNoteStore(process.env.NOTES_FILE ?? path.join(process.cwd(), "data", "notes.json"));
+  }
   return store;
 }
