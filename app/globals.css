@@ -10,6 +10,13 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-nunito);
   --radius-2xl: 1.25rem;
+  --font-mono-ui: var(--font-plex-mono);
+  --font-display: var(--font-archivo);
+  --color-olive: #2b3a10;
+  --color-olive-soft: #3a4a1a;
+  --color-lime: #c9d16c;
+  --color-coral: #ea5b4c;
+  --color-cream: #f7f5ef;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +30,29 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Field-input map: warm, slightly muted base tiles so the fields and satellite overlays stand out. */
+.field-map .leaflet-tile-pane {
+  filter: sepia(0.45) saturate(0.65) contrast(0.95);
+}
+.field-map .leaflet-container {
+  background: #e6dfcf;
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+}
+/* Black name tag on each field, e.g. "Kiambogo North · 1.8 ha" */
+.field-tag {
+  background: #111;
+  color: #fff;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: none;
+  padding: 3px 8px;
+  font-family: var(--font-plex-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.field-tag::before {
+  display: none;
 }

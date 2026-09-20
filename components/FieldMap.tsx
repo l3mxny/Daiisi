@@ -13,9 +13,9 @@ if (typeof window !== "undefined") {
 }
 import "@geoman-io/leaflet-geoman-free";
 
-import { ImageOverlay, MapContainer, Marker, Rectangle, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { ImageOverlay, MapContainer, Marker, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import type { Bbox } from "@/lib/geo";
-import { bboxFromCorners, bboxFromPoint, bboxToLeafletBounds } from "@/lib/geo";
+import { bboxAreaHectares, bboxFromCorners, bboxFromPoint, bboxToLeafletBounds, formatArea } from "@/lib/geo";
 
 // A drag shorter than this (in screen pixels) is treated as a plain click.
 // This has to be a pixel distance, not a fixed lat/lng delta — the same
@@ -160,6 +160,28 @@ function FlyToController({ target, onHandled }: { target: FlyTarget | null; onHa
   return null;
 }
 
+// 0°21'S 36°04'E style readout of where the map is centred, plus the imagery it will be judged with.
+function toDms(value: number, pos: string, neg: string): string {
+  const abs = Math.abs(value);
+  const deg = Math.floor(abs);
+  const min = Math.floor((abs - deg) * 60);
+  return `${deg}°${String(min).padStart(2, "0")}'${value >= 0 ? pos : neg}`;
+}
+
+function CenterReadout() {
+  const map = useMap();
+  const [center, setCenter] = useState(() => map.getCenter());
+  useMapEvents({ moveend: () => setCenter(map.getCenter()) });
+  return (
+    <div className="pointer-events-none absolute top-14 right-3 z-[1000] bg-white/95 px-3 py-2 text-[11px] leading-snug text-zinc-600 shadow-md">
+      <div>
+        {toDms(center.lat, "N", "S")} {toDms(center.lng, "E", "W")}
+      </div>
+      <div className="text-zinc-400">Sentinel-2 · 10 m/px</div>
+    </div>
+  );
+}
+
 export default function FieldMap({
   plots,
   selectedPlotId,
@@ -192,11 +214,12 @@ export default function FieldMap({
   const hasDraft = plots.some((p) => !p.saved);
 
   return (
-    <MapContainer center={initialCenter} zoom={13} className="h-full w-full">
+    <MapContainer center={initialCenter} zoom={13} className="field-map h-full w-full">
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       />
+      <CenterReadout />
       <GeomanEditController mode={mode} />
       <DrawHandler active={mode === "draw" && !hasDraft} onDrawComplete={onDrawComplete} />
       <FlyToController target={flyTo} onHandled={onFlyToHandled} />
@@ -222,7 +245,11 @@ export default function FieldMap({
               "pm:edit": (e) => onBboxEdit(plot.id, boundsToBbox((e.layer as L.Rectangle).getBounds())),
               "pm:dragend": (e) => onBboxEdit(plot.id, boundsToBbox((e.layer as L.Rectangle).getBounds())),
             }}
-          />
+          >
+            <Tooltip permanent direction="bottom" offset={[0, -6]} className="field-tag" interactive={false}>
+              {plot.details.name || plot.label} · {formatArea(bboxAreaHectares(plot.bbox))}
+            </Tooltip>
+          </Rectangle>
         );
       })}
 

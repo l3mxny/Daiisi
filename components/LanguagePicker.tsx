@@ -16,10 +16,10 @@ export default function LanguagePicker() {
   const caption = chosen ? "Your choice" : locationKnown ? "Suggested for your location" : "Suggested for you";
 
   return (
-    <div className="rounded-2xl bg-white/5 px-3.5 py-3 text-xs">
+    <div className="text-xs">
       <div className="flex items-center justify-between">
-        <span className="font-medium tracking-wide text-zinc-500 uppercase">Language</span>
-        <span className="text-zinc-500">{caption}</span>
+        <span className="font-medium tracking-wide text-white/70 uppercase">Language</span>
+        <span className="sr-only">{caption}</span>
       </div>
 
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -33,8 +33,8 @@ export default function LanguagePicker() {
               translate="no"
               aria-pressed={active}
               onClick={() => setLanguage(code)}
-              className={`rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${
-                active ? "bg-green-700 text-white" : "bg-white/10 text-zinc-300 hover:bg-white/20 hover:text-white"
+              className={`px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                active ? "bg-lime text-olive" : "bg-white text-olive hover:bg-lime/60"
               }`}
             >
               {lang.nativeName}
@@ -44,7 +44,7 @@ export default function LanguagePicker() {
       </div>
 
       {translation !== "idle" && (
-        <p className={`mt-2 ${translation === "error" ? "text-amber-400" : "text-zinc-500"}`}>
+        <p className={`mt-2 ${translation === "error" ? "text-amber-300" : "text-white/60"}`}>
           {translation === "translating" && "Translating…"}
           {translation === "done" && "Translated automatically by Google. It may not be perfect."}
           {translation === "error" && "Couldn't translate right now, so this is showing English."}
@@ -59,7 +59,7 @@ export default function LanguagePicker() {
             const code = e.target.value as LanguageCode;
             if (code) setLanguage(code);
           }}
-          className="mt-2 w-full rounded-full bg-white/10 px-3 py-1.5 text-xs text-zinc-300 outline-none hover:bg-white/20"
+          className="mt-2 w-full bg-white/10 px-2.5 py-1.5 text-[11px] text-white outline-none hover:bg-white/20"
         >
           <option value="">More languages…</option>
           {more.map((code) => {
