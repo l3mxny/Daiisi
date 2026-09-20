@@ -1,6 +1,6 @@
 # Daiisi
 
-demo video: https://www.youtube.com/watch?v=bAyyz1AnYbM&feature=youtu.be
+demo video: https://www.youtube.com/watch?feature=shared&v=8NjQad2hHf4
 
 An adaptive intelligence system that gives smallholder farmers satellite-grade advice about their own fields, in plain words, from nothing more than a web browser and a phone number.
 
