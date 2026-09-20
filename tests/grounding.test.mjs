@@ -58,3 +58,50 @@ describe("checkAnswer and the fallback", () => {
     assert.match(groundedFallback(event({ severity: "act" })), /^\*\*Act now\.\*\*/);
   });
 });
+
+describe("the farmer's own details", () => {
+  it("the crop's age counts as a given figure, so 'planted 63 days ago' is not flagged", async () => {
+    const { cropAgeDays } = await import("../lib/ai/grounding.ts");
+    const planted = new Date(Date.now() - 63 * 86_400_000).toISOString().slice(0, 10);
+    assert.equal(cropAgeDays(planted), 63);
+    assert.equal(cropAgeDays(null), null);
+    assert.equal(cropAgeDays("2999-01-01"), null, "a date in the future is not an age");
+    const e = event({ plantedOn: planted });
+    assert.deepEqual(ungroundedNumbers("The maize is about 9 weeks old, planted 63 days ago.", allowedNumbers(e, [], [])), []);
+    assert.deepEqual(ungroundedNumbers("The maize is 40 days old.", allowedNumbers(e, [], [])), [40]);
+  });
+});
+
+describe("causal claims about past weeks", () => {
+  it("flags certainty and cause, allows plain description of what happened", async () => {
+    const { causalClaim } = await import("../lib/ai/grounding.ts");
+    assert.ok(causalClaim("Similar conditions last year recovered without irrigation, so hold off."));
+    assert.ok(causalClaim("Irrigation worked last time, so irrigate now."));
+    assert.ok(causalClaim("This proves the field will recover."));
+    assert.equal(causalClaim("In a similar week last time the field improved."), null);
+    assert.equal(causalClaim("Rain of 89.5 mm is forecast, and NDVI is 0.917 and improving."), null);
+  });
+});
+
+describe("invented actions in past weeks", () => {
+  it("flags 'improved after irrigation' unless a past record actually mentions irrigation", async () => {
+    const { causalClaim } = await import("../lib/ai/grounding.ts");
+    const none = [{ summary: "Maize field: ACT. Rainfall replaced 17% of water lost.", verdict: "improved" }];
+    const logged = [{ summary: "Farmer irrigated. Rainfall replaced 17% of water lost.", verdict: "improved" }];
+    assert.ok(causalClaim("In a similar week last year the field improved after irrigation.", none));
+    assert.ok(causalClaim("Similar deficits improved with irrigation.", none));
+    assert.equal(causalClaim("In a similar week last year the field improved after irrigation.", logged), null);
+    assert.equal(causalClaim("In a similar week last year the field improved.", none), null);
+  });
+});
+
+describe("when the farmer's actions happened", () => {
+  it("'irrigated today' is flagged unless a note is dated today", async () => {
+    const { staleTimeClaim } = await import("../lib/ai/grounding.ts");
+    const old = [{ eventDate: "2026-09-17" }];
+    assert.ok(staleTimeClaim("The field has just been irrigated today and NDVI is up.", old, "2026-09-20"));
+    assert.ok(staleTimeClaim("Today you irrigated the north plot.", old, "2026-09-20"));
+    assert.equal(staleTimeClaim("The field has just been irrigated today.", [{ eventDate: "2026-09-20" }], "2026-09-20"), null);
+    assert.equal(staleTimeClaim("You irrigated 3 days ago. Rain is forecast today.", old, "2026-09-20"), null);
+  });
+});

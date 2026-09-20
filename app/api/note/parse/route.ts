@@ -3,6 +3,9 @@ import { groqComplete } from "@/lib/noteLlm";
 import { parseNote } from "@/lib/noteParser";
 import type { LlmCall } from "@/lib/noteLlm";
 
+// Satellite, weather and AI calls can be slow on a cold start; Vercel cuts a function off at this many seconds.
+export const maxDuration = 30;
+
 // POST /api/note/parse: works out what a transcript means. JSON body:
 //   transcript, defaultFieldId (the field whose panel is open), fields [{ id, label }],
 //   capturedAt (ISO time the note was recorded), tzOffsetMinutes (the browser's Date.getTimezoneOffset())

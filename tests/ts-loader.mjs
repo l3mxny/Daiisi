@@ -4,10 +4,12 @@ import ts from "typescript";
 
 // TypeScript files import each other without extensions ("./noteDates"); find the .ts file for them.
 export async function resolve(specifier, context, next) {
+  // The app's "@/..." alias points at the project root.
+  if (specifier.startsWith("@/")) specifier = new URL("../" + specifier.slice(2), import.meta.url).href;
   try {
     return await next(specifier, context);
   } catch (err) {
-    if (specifier.startsWith(".") && err.code === "ERR_MODULE_NOT_FOUND") {
+    if ((specifier.startsWith(".") || specifier.startsWith("file:")) && err.code === "ERR_MODULE_NOT_FOUND") {
       for (const suffix of [".ts", "/index.ts"]) {
         try {
           return await next(specifier + suffix, context);

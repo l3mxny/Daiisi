@@ -2,14 +2,16 @@ import { getStressEventDetail, setAiRecommendation, type StressEventDetail } fro
 import { listNotesForPrompt } from "@/db/fieldNotes";
 import { retrieveSimilarEvents, type EvidenceCandidate } from "../retrieval";
 import { generateText } from "./groq";
-import { checkAnswer, describeProblems, groundedFallback } from "./grounding";
+import { checkAnswer, cropAgeDays, describeProblems, groundedFallback } from "./grounding";
 import { NOTES_GUIDANCE, buildNotesSection } from "./notesPrompt";
 
-const SYSTEM_PROMPT = `You are an agronomy assistant for Daiisi, a satellite + weather monitoring tool for small farms.
+export const SYSTEM_PROMPT = `You are an agronomy assistant for Daiisi, a satellite + weather monitoring tool for small farms.
 Given the current week's data for one field and a short history of similar past situations on that same field, write a SHORT recommendation for a busy farmer, in plain everyday words:
-1. One priority line stating urgency plainly (e.g. "High priority — irrigate within 2 days." or "No action needed right now.")
-2. At most 2 short sentences saying why, using only the one or two numbers that matter most. No jargon, no lists, no restating every signal. Mention the seasonal outlook or a past event only if it changes what the farmer should do.
+1. One priority line stating urgency plainly (e.g. "High priority — irrigate soon." or "No action needed right now.") Do not give a number of days for when to act; you have no data for that.
+2. At most 2 short sentences saying why, using only the one or two numbers that matter most. No jargon, no lists, no restating every signal. Mention the seasonal outlook or a past event only if it changes what the farmer should do. Describe a past event only as what happened ("in a similar week last time the field improved"), never as proof that an action worked, or that the same will happen now. The past weeks record only conditions and whether greenness later rose or fell; they do not say what the farmer did, so never say a past week improved or worsened "after" irrigation, spraying or any action. If the past weeks had different outcomes, say the history is mixed instead of quoting only the good ones.
 Keep the whole answer under 50 words. Copy every figure exactly as it appears in the data, with the same digits and units: never round, convert, average or estimate one, and never state a number you weren't given. Your priority line must agree with the Verdict you are given (ACT = act now, WATCH = keep an eye on it, OK = no action needed); you do not decide the verdict. If data is missing or a satellite scene is stale, say so in a few words.
+
+The crop and its planting date come with the data. Use them to judge growth stage, because the same water deficit means different things at different stages: a young crop (roughly its first 6 weeks) has little leaf cover, so a low NDVI is expected and is not a stress signal, while a crop at its peak growth or flowering is the most sensitive to water stress, and one nearing harvest needs little more water. Name a stage only in general words and only if you are confident for that crop; never state how many days a stage lasts. Never tell the farmer a water deficit is acceptable or "expected" because of the crop's age. If no planting date is given, say nothing about the crop's stage.
 
 ${NOTES_GUIDANCE}`;
 
@@ -42,22 +44,16 @@ function formatSeasonalOutlook(outlook: StressEventDetail["seasonalOutlook"]): s
   return `next ${outlook.windowDays} days — ${precip}; ${temp}`;
 }
 
-// Cached on the stress_events row — generating this again for the same
-// event just returns what was already written the first time it was asked
-// for, rather than re-calling the model.
-export async function generateAiRecommendation(stressEventId: string): Promise<string> {
-  const event = await getStressEventDetail(stressEventId);
-  if (!event) throw new Error("Stress event not found");
-  if (event.aiRecommendation) return event.aiRecommendation;
+// The user message for one field: its numbers, what the farmer told us, their notes and similar past weeks.
+export function buildUserPrompt(event: StressEventDetail, evidence: EvidenceCandidate[], notesSection: string): string {
+  const age = cropAgeDays(event.plantedOn);
+  const details = [
+    `crop: ${event.crop || "not specified"}`,
+    age === null ? "planting date: not given" : age < 14 ? `planted ${age} days ago` : `planted ${age} days ago (about ${Math.round(age / 7)} weeks old)`,
+  ].join("; ");
 
-  const evidence = await retrieveSimilarEvents(stressEventId, 3);
-  // The farmer's own voice notes for this field. Extra context only, so a problem reading them must never
-  // stop the recommendation. Saving or deleting a note clears this row's cached text (db/fieldNotes.ts), so
-  // the next request lands here and regenerates with the change.
-  const notes = await listNotesForPrompt(event.fieldId).catch(() => []);
-  const notesSection = buildNotesSection(notes, new Date().toISOString().slice(0, 10));
-
-  const userPrompt = `Field: "${event.fieldName}" (${event.crop || "crop not specified"})
+  const userPrompt = `Field: "${event.fieldName}"
+What the farmer told us about it: ${details}
 Week of: ${event.weekStart}
 Verdict (decided by the rules; do not contradict it): ${event.severity.toUpperCase()}
 
@@ -74,13 +70,32 @@ ${notesSection}Similar past events on this field:
 ${formatEvidence(evidence)}
 
 Write the recommendation now.`;
+  return userPrompt;
+}
+
+// Cached on the stress_events row — generating this again for the same
+// event just returns what was already written the first time it was asked
+// for, rather than re-calling the model.
+export async function generateAiRecommendation(stressEventId: string): Promise<string> {
+  const event = await getStressEventDetail(stressEventId);
+  if (!event) throw new Error("Stress event not found");
+  if (event.aiRecommendation) return event.aiRecommendation;
+
+  const evidence = await retrieveSimilarEvents(stressEventId, 3);
+  // The farmer's own voice notes for this field. Extra context only, so a problem reading them must never
+  // stop the recommendation. Saving or deleting a note clears this row's cached text (db/fieldNotes.ts), so
+  // the next request lands here and regenerates with the change.
+  const notes = await listNotesForPrompt(event.fieldId).catch(() => []);
+  const notesSection = buildNotesSection(notes, new Date().toISOString().slice(0, 10));
+
+  const userPrompt = buildUserPrompt(event, evidence, notesSection);
 
   // Check the answer against the data before anyone sees it: ask again once with the problems spelled out,
   // and if it is still wrong write the text from the data instead of showing something inaccurate.
   let text = await generateText(SYSTEM_PROMPT, userPrompt);
   let problems = checkAnswer(text, event, evidence, notes);
   if (problems) {
-    console.warn(`[ai] answer failed the accuracy check (${problems.numbers.length} unsupported figures, verdict conflict: ${problems.verdict !== null}); retrying`);
+    console.warn(`[ai] answer failed the accuracy check (${problems.numbers.length} unsupported figures, verdict conflict: ${problems.verdict !== null}, unsupported cause: ${problems.causal !== null}); retrying`);
     text = await generateText(
       SYSTEM_PROMPT,
       `${userPrompt}\n\nYour previous answer was rejected: ${describeProblems(problems)}. Write it again using only the figures above, exactly as given.`

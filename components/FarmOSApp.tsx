@@ -134,8 +134,8 @@ export default function FarmOSApp() {
       .finally(() => setLocating(false));
   }
 
-  function handleSelectSearchLocation(loc: { lat: number; lng: number }) {
-    setFlyTo({ lat: loc.lat, lng: loc.lng, zoom: 15 });
+  function handleSelectSearchLocation(loc: { lat: number; lng: number; zoom?: number }) {
+    setFlyTo({ lat: loc.lat, lng: loc.lng, zoom: loc.zoom ?? 15 });
   }
 
   async function fetchPlotStats(id: string, bbox: Bbox) {

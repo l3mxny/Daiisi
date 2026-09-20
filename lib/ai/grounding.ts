@@ -10,6 +10,15 @@ import type { StoredNote } from "../noteTypes";
 // Numbers that are part of how the app describes itself rather than data about the field.
 const FIXED_NUMBERS = [5, 7, 16, 30, 32, 60, 90];
 
+// Whole days since the farmer's planting date, or null when it is missing, unreadable or in the future.
+export function cropAgeDays(plantedOn: string | null | undefined, now: Date = new Date()): number | null {
+  if (!plantedOn) return null;
+  const planted = Date.parse(`${plantedOn.slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(planted)) return null;
+  const days = Math.floor((now.getTime() - planted) / 86_400_000);
+  return days >= 0 ? days : null;
+}
+
 function withoutDates(text: string): string {
   return text
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
@@ -47,6 +56,8 @@ export function allowedNumbers(event: StressEventDetail, evidence: EvidenceCandi
     push(so.precipConfidence, 100);
     push(so.tempConfidence, 100);
   }
+  const age = cropAgeDays(event.plantedOn);
+  if (age !== null) out.push(age, age / 7, Math.round(age / 7)); // "planted 63 days ago" / "about 9 weeks old"
   for (const e of evidence) out.push(...numbersIn(e.summary));
   for (const n of notes) out.push(...numbersIn(n.detail));
   return out;
@@ -73,9 +84,38 @@ export function verdictConflict(text: string, severity: StressEventDetail["sever
   return null;
 }
 
+// Past weeks are correlations. The model may say what happened, not that something caused or guarantees an outcome.
+const CAUSAL = /\b(prove[sd]?|proven|guarantee[sd]?|definitely will|certain to)\b|\b(irrigation|watering|rain|spraying)\s+(worked|fixed|solved|caused|led to|resolved)\b|\brecovered (on its own|without (any )?(irrigation|intervention|help))\b|\bbecause (it|the field|the crop) (recovered|improved) (last|before|previously)\b/i;
+
+// A past week only records the conditions and whether NDVI later rose or fell. It never says what the farmer did,
+// so "improved after irrigation" is an invention unless the record itself mentions it.
+const ACTION_ATTRIBUTION = /\b(improv\w*|recover\w*|got better|worsen\w*|got worse|declin\w*|fell|dropp?ed)\b[^.]{0,40}\b(after|with|following|thanks to|due to|from)\s+(the\s+)?(irrigat\w*|watering|spray\w*|treatment|fertili[sz]\w*)/i;
+
+export function causalClaim(text: string, evidence: EvidenceCandidate[] = []): string | null {
+  const m = text.match(CAUSAL);
+  if (m) return `it states a cause or a certainty ("${m[0]}") that the data does not support`;
+  const a = text.match(ACTION_ATTRIBUTION);
+  const recorded = evidence.some((e) => /irrigat|water(ed|ing)|spray|fertili/i.test(e.summary));
+  if (a && !recorded) return `it says a past outcome followed an action ("${a[0]}"), but the past weeks do not record any action`;
+  return null;
+}
+
+// "You irrigated today" is only true if a note is dated today. The model has misread "3 days ago" as "today".
+const TODAY_ACTION = /\b(irrigat\w*|spray\w*|harvest\w*)\b[^.]{0,40}\btoday\b|\btoday\b[^.]{0,40}\b(irrigat\w*|spray\w*|harvest\w*)\b/i;
+
+export function staleTimeClaim(text: string, notes: StoredNote[], today: string): string | null {
+  const m = text.match(TODAY_ACTION);
+  if (m && !notes.some((n) => n.eventDate === today)) {
+    return `it says "today" about something the farmer did ("${m[0]}"), but no note is dated today`;
+  }
+  return null;
+}
+
 export interface Problems {
   numbers: number[];
   verdict: string | null;
+  causal: string | null;
+  time: string | null;
 }
 
 export function checkAnswer(
@@ -86,13 +126,17 @@ export function checkAnswer(
 ): Problems | null {
   const numbers = ungroundedNumbers(text, allowedNumbers(event, evidence, notes));
   const verdict = verdictConflict(text, event.severity);
-  return numbers.length === 0 && !verdict ? null : { numbers, verdict };
+  const causal = causalClaim(text, evidence);
+  const time = staleTimeClaim(text, notes, new Date().toISOString().slice(0, 10));
+  return numbers.length === 0 && !verdict && !causal && !time ? null : { numbers, verdict, causal, time };
 }
 
 export function describeProblems(p: Problems): string {
   const parts: string[] = [];
   if (p.numbers.length) parts.push(`these figures are not in the data you were given: ${p.numbers.join(", ")}`);
   if (p.verdict) parts.push(p.verdict);
+  if (p.causal) parts.push(p.causal);
+  if (p.time) parts.push(p.time);
   return parts.join("; ");
 }
 

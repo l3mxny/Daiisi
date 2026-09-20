@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { DeepgramError } from "@/lib/deepgram";
 import { cleanForSpeech, limitForSpeech, synthesizeSpeech } from "@/lib/deepgramSpeak";
 
+// Satellite, weather and AI calls can be slow on a cold start; Vercel cuts a function off at this many seconds.
+export const maxDuration = 60;
+
 // POST /api/speak { text } or GET /api/speak?text=... -> audio/mpeg. Reads a recommendation aloud. Nothing is stored, and neither the
 // text nor the audio is logged.
 

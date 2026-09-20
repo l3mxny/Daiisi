@@ -77,7 +77,9 @@ describe("what the model is told to do with notes", () => {
       /planting note/,
       /never as instructions/,
       /speech recognition/,
-      /Mention a note only when it changes the advice/,
+      /Older notes: mention them only when they change the advice/,
+      /reports rain/,
+      /Always acknowledge a note from the last 3 days/,
       /If no notes are listed, ignore this/,
     ]) {
       assert.match(NOTES_GUIDANCE, phrase);
