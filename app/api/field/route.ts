@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Bbox } from "@/lib/geo";
 import { bboxCentroid, bboxFromPoint } from "@/lib/geo";
-import { findLatestClearScene, getNdviImage, getNdviTimeSeries, getTrueColorImage } from "@/lib/sentinelHub";
-import { buildFallbackObservation } from "@/lib/fallback";
-import { getWeatherMetrics } from "@/lib/weather";
-import { getClimateNormal } from "@/lib/climate";
-import { buildStressEvent, computeNdviDelta } from "@/lib/stressEvent";
-import type { FieldApiResponse, ObservationResult } from "@/lib/types";
+import { computeFieldSnapshot } from "@/lib/fieldSnapshot";
+import { getFieldById } from "@/db/fields";
+import { recordStressEvent } from "@/db/stressEvents";
+import { evaluatePendingOutcome } from "@/db/outcomes";
+import { getWeekStart } from "@/lib/week";
+import type { FieldApiResponse } from "@/lib/types";
 
 function isValidBbox(value: unknown): value is Bbox {
   return (
@@ -37,82 +37,41 @@ export async function POST(req: NextRequest) {
 
   const [lat, lng] = bboxCentroid(bbox);
 
-  // Weather has no cloud dependency and exists for every coordinate on
-  // Earth, so unlike Sentinel-2 imagery, a failure here is a real error —
-  // never silently swapped for fixture data. The climate normal is pure
-  // enrichment (getClimateNormal never rejects — it degrades to null), so it
-  // rides along on the same Promise.all without affecting error handling.
-  let weather;
-  let climateNormal;
+  let snapshot;
   try {
-    [weather, climateNormal] = await Promise.all([getWeatherMetrics(lat, lng), getClimateNormal(lat, lng)]);
+    snapshot = await computeFieldSnapshot(bbox, { withImages: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/field] weather request failed:", message);
     return NextResponse.json({ error: `Weather data unavailable: ${message}` }, { status: 502 });
   }
 
-  let observation: ObservationResult;
-  let usedFallback = false;
-  try {
-    observation = await buildLiveObservation(bbox);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[/api/field] Sentinel-2 request failed, falling back to fixtures:", message);
-    observation = await buildFallbackObservation();
-    usedFallback = true;
+  // When this request is for a saved field, record this check-in as this
+  // week's stress_events row (same table the scheduled job writes to) —
+  // best-effort: a failure here shouldn't block the farmer from seeing
+  // their field's stats.
+  let stressEventId: string | null = null;
+  if (typeof body?.fieldId === "string") {
+    try {
+      const field = await getFieldById(body.fieldId);
+      if (field) {
+        const weekStart = getWeekStart();
+        await evaluatePendingOutcome(field, snapshot, weekStart);
+        stressEventId = await recordStressEvent(field, snapshot, weekStart);
+      }
+    } catch (err) {
+      console.error("[/api/field] failed to record stress event:", err);
+    }
   }
-
-  const ndviDelta = computeNdviDelta(observation.timeseries);
-  const stressEvent = buildStressEvent(weather, ndviDelta, climateNormal);
 
   const response: FieldApiResponse = {
     field: { bbox, centroid: [lat, lng] },
-    observation,
-    weather,
-    stressEvent,
-    usedFallback,
+    observation: snapshot.observation,
+    weather: snapshot.weather,
+    stressEvent: snapshot.stressEvent,
+    seasonalOutlook: snapshot.seasonalOutlook,
+    usedFallback: snapshot.usedFallback,
+    stressEventId,
   };
   return NextResponse.json(response);
-}
-
-async function buildLiveObservation(bbox: Bbox): Promise<ObservationResult> {
-  const scene = await findLatestClearScene(bbox);
-
-  if (!scene) {
-    return {
-      date: null,
-      ndviMean: null,
-      ndviValid: false,
-      cloudCover: null,
-      daysSinceClear: null,
-      trueColorImage: null,
-      ndviImage: null,
-      timeseries: await getNdviTimeSeries(bbox),
-    };
-  }
-
-  const [trueColorImage, ndviImage, timeseries] = await Promise.all([
-    getTrueColorImage(bbox, scene.date),
-    getNdviImage(bbox, scene.date),
-    getNdviTimeSeries(bbox),
-  ]);
-
-  const date = scene.date.slice(0, 10);
-  const daysSinceClear = Math.round((Date.now() - new Date(scene.date).getTime()) / 86_400_000);
-  // Statistics coverage is sparse (cloud-masked days are dropped), so the
-  // exact scene date rarely has its own stats entry — use the most recent
-  // valid point instead.
-  const latestSeriesPoint = timeseries[timeseries.length - 1] ?? null;
-
-  return {
-    date,
-    ndviMean: latestSeriesPoint?.mean ?? null,
-    ndviValid: latestSeriesPoint !== null,
-    cloudCover: scene.cloudCover,
-    daysSinceClear,
-    trueColorImage,
-    ndviImage,
-    timeseries,
-  };
 }

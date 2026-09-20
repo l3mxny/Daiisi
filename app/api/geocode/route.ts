@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   url.searchParams.set("limit", "5");
 
   const res = await fetch(url.toString(), {
-    headers: { "User-Agent": "FarmOS/0.1 (hackathon prototype)" },
+    headers: { "User-Agent": "Daiisi/0.1 (hackathon prototype)" },
   });
   if (!res.ok) {
     return NextResponse.json({ error: `Location search failed: ${res.status}` }, { status: 502 });

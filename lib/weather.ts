@@ -16,6 +16,7 @@ export interface WeatherMetrics {
   forecastRain16: number;
   daysSinceRain: number;
   heatDays7: number;
+  rain7: number; // actual rainfall over the last 7 days — for checking what really happened, vs. the forecast used at recommendation time
 }
 
 interface OpenMeteoResponse {
@@ -66,7 +67,10 @@ export function parseWeatherMetrics(json: OpenMeteoResponse): WeatherMetrics {
     .slice(heatWindowStart, todayIndex)
     .filter((v): v is number => typeof v === "number" && v > HEAT_THRESHOLD_C).length;
 
-  return { rain30, et030, waterRatio, forecastRain16, daysSinceRain, heatDays7 };
+  // Same 7-day window as heatDays7 — reused rather than a separate constant.
+  const rain7 = sum(precip.slice(heatWindowStart, todayIndex));
+
+  return { rain30, et030, waterRatio, forecastRain16, daysSinceRain, heatDays7, rain7 };
 }
 
 // No API key, no auth. Throws on any failure — weather has no cloud

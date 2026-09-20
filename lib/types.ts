@@ -2,6 +2,7 @@ import type { Bbox } from "./geo";
 import type { NdviPoint } from "./sentinelHub";
 import type { WeatherMetrics } from "./weather";
 import type { StressEvent } from "./stressEvent";
+import type { SeasonalOutlook } from "./seasonalOutlook";
 
 export interface ObservationResult {
   date: string | null; // yyyy-mm-dd of the satellite scene
@@ -19,7 +20,9 @@ export interface FieldApiResponse {
   observation: ObservationResult;
   weather: WeatherMetrics;
   stressEvent: StressEvent;
+  seasonalOutlook: SeasonalOutlook | null;
   usedFallback: boolean;
+  stressEventId: string | null; // this week's stress_events row, for logging an intervention against
   error?: string;
 }
 

@@ -3,13 +3,12 @@
 import LanguagePicker from "./LanguagePicker";
 import type { Plot } from "@/lib/types";
 
-export type TabId = "input" | "results" | "text" | "info";
+export type TabId = "input" | "results" | "text";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "input", label: "Field input" },
   { id: "results", label: "Results" },
   { id: "text", label: "Farmer's text" },
-  { id: "info", label: "General info" },
 ];
 
 function TabIcon({ id }: { id: TabId }) {
@@ -27,20 +26,9 @@ function TabIcon({ id }: { id: TabId }) {
       </svg>
     );
   }
-  if (id === "text") {
-    return (
-      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4">
-        <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" strokeLinejoin="round" />
-      </svg>
-    );
-  }
   return (
     <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4">
-      <path
-        d="M4.6 11.5a2.4 2.4 0 0 1-.4-4.77 2.9 2.9 0 0 1 5.5-1.63 2.4 2.4 0 0 1 2.2 4.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -49,10 +37,14 @@ export default function Sidebar({
   activeTab,
   onTabChange,
   plots,
+  phone,
+  onSwitchNumber,
 }: {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   plots: Plot[];
+  phone: string;
+  onSwitchNumber: () => void;
 }) {
   const readyPlots = plots.filter((p) => p.status === "ready" && p.data);
   const lastPassDate = readyPlots.reduce<string | null>((latest, p) => {
@@ -66,9 +58,9 @@ export default function Sidebar({
       <div className="flex flex-col gap-8">
         <div className="flex items-center gap-2.5 px-1">
           <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-green-600 text-sm font-bold text-white">
-            F
+            D
           </span>
-          <span className="font-serif text-lg text-zinc-50">FarmOS</span>
+          <span className="font-serif text-lg text-zinc-50">Daiisi</span>
         </div>
 
         <nav className="flex flex-col gap-1.5">
@@ -95,6 +87,15 @@ export default function Sidebar({
         <div className="rounded-2xl bg-white/5 px-3.5 py-3 text-xs">
           <div className="font-medium tracking-wide text-zinc-500 uppercase">Satellite</div>
           <div className="mt-1 text-zinc-300">{lastPassDate ? `Last pass ${lastPassDate}` : "No imagery yet"}</div>
+        </div>
+        <div className="flex items-center justify-between rounded-2xl bg-white/5 px-3.5 py-3 text-xs">
+          <div className="min-w-0">
+            <div className="font-medium tracking-wide text-zinc-500 uppercase">Signed in</div>
+            <div className="mt-1 truncate text-zinc-300">{phone}</div>
+          </div>
+          <button onClick={onSwitchNumber} className="shrink-0 text-zinc-400 hover:text-zinc-100">
+            Switch
+          </button>
         </div>
       </div>
     </aside>

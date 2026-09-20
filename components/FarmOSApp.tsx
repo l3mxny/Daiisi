@@ -4,17 +4,27 @@ import { useEffect, useState } from "react";
 import Sidebar, { type TabId } from "./Sidebar";
 import FieldInputPanel from "./FieldInputPanel";
 import ResultsPanel from "./ResultsPanel";
-import GeneralInfoPanel from "./GeneralInfoPanel";
+import PhoneSignIn from "./PhoneSignIn";
 import TextPreviewPanel from "./TextPreviewPanel";
 import type { MapMode } from "./MapModeControls";
 import type { FlyTarget } from "./FieldMap";
 import type { FieldDetailsPatch } from "./FieldSidebar";
 import { getCurrentLocation } from "@/lib/geoLocation";
+import { getStoredPhone, setStoredPhone, clearStoredPhone } from "@/lib/phoneSession";
 import type { Bbox } from "@/lib/geo";
-import type { FieldApiResponse, Plot } from "@/lib/types";
+import type { FieldApiResponse, FieldDetails, Plot, SoilType } from "@/lib/types";
 import type { SimulatedMessage } from "@/lib/smsSimulation";
 
 const PLOT_COLORS = ["#2563eb", "#d97706", "#7c3aed", "#059669", "#db2777", "#0891b2"];
+
+interface FieldRecord {
+  id: string;
+  name: string;
+  crop: string;
+  soilType: SoilType | null;
+  plantedOn: string | null;
+  bbox: Bbox;
+}
 
 function makeId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -22,11 +32,17 @@ function makeId(): string {
     : `plot-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function emptyDetails() {
+function emptyDetails(): FieldDetails {
   return { name: "", crop: "", plantedOn: null, soilType: null };
 }
 
+function detailsFromRecord(record: FieldRecord): FieldDetails {
+  return { name: record.name, crop: record.crop, plantedOn: record.plantedOn, soilType: record.soilType };
+}
+
 export default function FarmOSApp() {
+  const [initializing, setInitializing] = useState(true);
+  const [phone, setPhone] = useState<string | null>(null);
   const [plots, setPlots] = useState<Plot[]>([]);
   const [selectedPlotId, setSelectedPlotId] = useState<string | null>(null);
   const [ndviOpacity, setNdviOpacity] = useState(0.7);
@@ -38,6 +54,19 @@ export default function FarmOSApp() {
   const [locationError, setLocationError] = useState<string | null>(null);
   const [outbox, setOutbox] = useState<SimulatedMessage[]>([]);
 
+  // Restores a returning farmer's session from localStorage — this is what
+  // makes their fields survive a refresh instead of resetting every time.
+  useEffect(() => {
+    // Deferred a tick so this isn't a synchronous setState call in the
+    // effect body itself — purely to satisfy the lint rule, behavior is
+    // otherwise identical (runs on the very next microtask).
+    Promise.resolve().then(() => {
+      const stored = getStoredPhone();
+      if (stored) setPhone(stored);
+      setInitializing(false);
+    });
+  }, []);
+
   useEffect(() => {
     // Center on the farmer's own location as soon as we can. The map starts
     // on its Central Valley default while this resolves. Silent on failure
@@ -47,6 +76,53 @@ export default function FarmOSApp() {
       .then((loc) => setFlyTo({ lat: loc.lat, lng: loc.lng, zoom: 15 }))
       .catch(() => {});
   }, []);
+
+  // Loads this phone number's saved fields from Postgres, then kicks off a
+  // live stats fetch for each — the same path a freshly-saved field goes
+  // through, so the data shown after sign-in is never stale.
+  useEffect(() => {
+    if (!phone) return;
+    let cancelled = false;
+
+    fetch(`/api/fields?phone=${encodeURIComponent(phone)}`)
+      .then((res) => res.json())
+      .then((records: FieldRecord[]) => {
+        if (cancelled || !Array.isArray(records)) return;
+        const loaded: Plot[] = records.map((record, index) => ({
+          id: record.id,
+          label: record.name || `Field ${index + 1}`,
+          bbox: record.bbox,
+          color: PLOT_COLORS[index % PLOT_COLORS.length],
+          status: "loading",
+          saved: true,
+          details: detailsFromRecord(record),
+          data: null,
+          previousData: null,
+          error: null,
+        }));
+        setPlots(loaded);
+        setPlotCount(loaded.length);
+        loaded.forEach((plot) => fetchPlotStats(plot.id, plot.bbox));
+      })
+      .catch((err) => console.error("Failed to load saved fields:", err));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phone]);
+
+  function handleSignIn(normalizedPhone: string) {
+    setStoredPhone(normalizedPhone);
+    setPhone(normalizedPhone);
+  }
+
+  function handleSwitchNumber() {
+    clearStoredPhone();
+    setPhone(null);
+    setPlots([]);
+    setSelectedPlotId(null);
+    setPlotCount(0);
+  }
 
   function handleFindLocation() {
     setLocating(true);
@@ -66,7 +142,7 @@ export default function FarmOSApp() {
       const res = await fetch("/api/field", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bbox }),
+        body: JSON.stringify({ bbox, fieldId: id }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -115,26 +191,61 @@ export default function FarmOSApp() {
     setPlots((prev) =>
       prev.map((p) => (p.id === id ? { ...p, bbox, status: p.saved ? "loading" : p.status } : p))
     );
-    if (plot.saved) fetchPlotStats(id, bbox);
+    if (plot.saved) {
+      persistField({ ...plot, bbox });
+      fetchPlotStats(id, bbox);
+    }
+  }
+
+  // Mirrors a saved field into Postgres, scoped to the signed-in phone
+  // number — best-effort: a failure here shouldn't block the farmer from
+  // seeing their field's stats, which come from fetchPlotStats regardless.
+  async function persistField(plot: Plot) {
+    if (!phone) return;
+    try {
+      await fetch("/api/fields", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: plot.id,
+          phone,
+          name: plot.details.name || plot.label,
+          crop: plot.details.crop,
+          soilType: plot.details.soilType,
+          plantedOn: plot.details.plantedOn,
+          bbox: plot.bbox,
+        }),
+      });
+    } catch (err) {
+      console.error("Failed to save field to the database:", err);
+    }
   }
 
   function handleUpdateDetails(id: string, patch: FieldDetailsPatch) {
     setPlots((prev) => prev.map((p) => (p.id === id ? { ...p, details: { ...p.details, ...patch } } : p)));
   }
 
-  function handleSaveField(id: string) {
+  async function handleSaveField(id: string) {
     const plot = plots.find((p) => p.id === id);
     if (!plot) return;
     setPlots((prev) =>
       prev.map((p) => (p.id === id ? { ...p, saved: true, label: p.details.name || p.label, status: "loading" } : p))
     );
     setMapMode("cursor");
+    // Awaited so the field row exists before fetchPlotStats asks /api/field
+    // to record this week's stress event against it.
+    await persistField(plot);
     fetchPlotStats(id, plot.bbox);
   }
 
   function handleRemovePlot(id: string) {
     setPlots((prev) => prev.filter((p) => p.id !== id));
     setSelectedPlotId((current) => (current === id ? null : current));
+    if (phone) {
+      fetch(`/api/fields/${id}?phone=${encodeURIComponent(phone)}`, { method: "DELETE" }).catch((err) =>
+        console.error("Failed to delete field:", err)
+      );
+    }
   }
 
   function handleRefreshPlot(id: string) {
@@ -144,9 +255,17 @@ export default function FarmOSApp() {
     fetchPlotStats(id, plot.bbox);
   }
 
+  if (initializing) {
+    return <div className="h-screen w-screen bg-[#f7f3ea]" />;
+  }
+
+  if (!phone) {
+    return <PhoneSignIn onSignIn={handleSignIn} />;
+  }
+
   return (
     <div className="flex h-screen w-screen bg-[#f7f3ea]">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} plots={plots} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} plots={plots} phone={phone} onSwitchNumber={handleSwitchNumber} />
       <main className="h-full min-w-0 flex-1">
         {activeTab === "input" && (
           <FieldInputPanel
@@ -175,7 +294,6 @@ export default function FarmOSApp() {
           <ResultsPanel plots={plots.filter((p) => p.saved)} onRefreshPlot={handleRefreshPlot} />
         )}
         {activeTab === "text" && <TextPreviewPanel plots={plots} outbox={outbox} onOutboxChange={setOutbox} />}
-        {activeTab === "info" && <GeneralInfoPanel />}
       </main>
     </div>
   );

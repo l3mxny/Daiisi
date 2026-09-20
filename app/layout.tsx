@@ -8,8 +8,8 @@ const nunito = Nunito({
 });
 
 export const metadata: Metadata = {
-  title: "FarmOS",
-  description: "Sentinel-2 field inspector",
+  title: "Daiisi",
+  description: "Satellite + weather field monitoring for small farms",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
