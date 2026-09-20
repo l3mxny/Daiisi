@@ -1,6 +1,7 @@
 import { getDb } from "./index";
 import { getEmbedding, toVectorLiteral } from "@/lib/embeddings";
 import { buildStressEventSummary, type FieldSnapshot } from "@/lib/fieldSnapshot";
+import type { SeasonalOutlook } from "@/lib/seasonalOutlook";
 import type { Severity, NdviTrend } from "@/lib/stressEvent";
 import type { FieldRow } from "./fields";
 
@@ -20,6 +21,7 @@ export interface StressEventInput {
   ndviTrend: NdviTrend | null;
   cloudCover: number | null;
   daysSinceClear: number | null;
+  seasonalOutlook: SeasonalOutlook | null;
   summary: string;
   embedding: number[];
 }
@@ -34,12 +36,12 @@ export async function upsertStressEvent(input: StressEventInput): Promise<string
        field_id, week_start, severity,
        water_ratio, rain_30, et0_30, forecast_rain_16, heat_days_7, rain_30_normal, rain_anomaly_ratio,
        ndvi_mean, ndvi_delta, ndvi_trend, cloud_cover, days_since_clear,
-       summary, embedding
+       seasonal_outlook, summary, embedding
      ) VALUES (
        $1, $2, $3,
        $4, $5, $6, $7, $8, $9, $10,
        $11, $12, $13, $14, $15,
-       $16, $17::vector
+       $16, $17, $18::vector
      )
      ON CONFLICT (field_id, week_start) DO UPDATE SET
        severity = EXCLUDED.severity,
@@ -55,6 +57,7 @@ export async function upsertStressEvent(input: StressEventInput): Promise<string
        ndvi_trend = EXCLUDED.ndvi_trend,
        cloud_cover = EXCLUDED.cloud_cover,
        days_since_clear = EXCLUDED.days_since_clear,
+       seasonal_outlook = EXCLUDED.seasonal_outlook,
        summary = EXCLUDED.summary,
        embedding = EXCLUDED.embedding
      RETURNING id`,
@@ -74,6 +77,7 @@ export async function upsertStressEvent(input: StressEventInput): Promise<string
       input.ndviTrend,
       input.cloudCover,
       input.daysSinceClear,
+      input.seasonalOutlook ? JSON.stringify(input.seasonalOutlook) : null,
       input.summary,
       toVectorLiteral(input.embedding),
     ]
@@ -117,6 +121,7 @@ export interface StressEventDetail {
   ndviTrend: NdviTrend | null;
   cloudCover: number | null;
   daysSinceClear: number | null;
+  seasonalOutlook: SeasonalOutlook | null;
   summary: string;
   aiRecommendation: string | null;
 }
@@ -150,6 +155,7 @@ export async function getStressEventDetail(id: string): Promise<StressEventDetai
     ndviTrend: r.ndvi_trend,
     cloudCover: r.cloud_cover,
     daysSinceClear: r.days_since_clear,
+    seasonalOutlook: r.seasonal_outlook,
     summary: r.summary,
     aiRecommendation: r.ai_recommendation,
   };
@@ -186,6 +192,7 @@ export async function recordStressEvent(field: FieldRow, snapshot: FieldSnapshot
     ndviTrend: snapshot.stressEvent.signature.ndviTrend,
     cloudCover: snapshot.observation.cloudCover,
     daysSinceClear: snapshot.observation.daysSinceClear,
+    seasonalOutlook: snapshot.seasonalOutlook,
     summary,
     embedding,
   });

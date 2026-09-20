@@ -4,6 +4,7 @@ import { findLatestClearScene, getNdviImage, getNdviTimeSeries, getTrueColorImag
 import { buildFallbackObservation } from "./fallback";
 import { getWeatherMetrics, type WeatherMetrics } from "./weather";
 import { getClimateNormal, type ClimateNormal } from "./climate";
+import { getSeasonalOutlook, type SeasonalOutlook } from "./seasonalOutlook";
 import { buildStressEvent, computeNdviDelta, type StressEvent } from "./stressEvent";
 import type { ObservationResult } from "./types";
 
@@ -52,16 +53,23 @@ export interface FieldSnapshot {
   observation: ObservationResult;
   weather: WeatherMetrics;
   climateNormal: ClimateNormal | null;
+  seasonalOutlook: SeasonalOutlook | null;
   stressEvent: StressEvent;
   usedFallback: boolean;
 }
 
 // Throws on weather failure (a real error — see lib/weather.ts), falls back
-// to fixture imagery on a Sentinel Hub failure (see lib/fallback.ts).
+// to fixture imagery on a Sentinel Hub failure (see lib/fallback.ts). The
+// seasonal outlook is pure enrichment like climateNormal — getSeasonalOutlook
+// degrades to null on failure rather than rejecting.
 export async function computeFieldSnapshot(bbox: Bbox, options: { withImages: boolean }): Promise<FieldSnapshot> {
   const [lat, lng] = bboxCentroid(bbox);
 
-  const [weather, climateNormal] = await Promise.all([getWeatherMetrics(lat, lng), getClimateNormal(lat, lng)]);
+  const [weather, climateNormal, seasonalOutlook] = await Promise.all([
+    getWeatherMetrics(lat, lng),
+    getClimateNormal(lat, lng),
+    getSeasonalOutlook(lat, lng).catch(() => null),
+  ]);
 
   let observation: ObservationResult;
   let usedFallback = false;
@@ -76,7 +84,7 @@ export async function computeFieldSnapshot(bbox: Bbox, options: { withImages: bo
   const ndviDelta = computeNdviDelta(observation.timeseries);
   const stressEvent = buildStressEvent(weather, ndviDelta, climateNormal);
 
-  return { observation, weather, climateNormal, stressEvent, usedFallback };
+  return { observation, weather, climateNormal, seasonalOutlook, stressEvent, usedFallback };
 }
 
 // The short text a stress_events row is embedded from — shared so a manual
@@ -84,5 +92,19 @@ export async function computeFieldSnapshot(bbox: Bbox, options: { withImages: bo
 // way, since both write into the same table.
 export function buildStressEventSummary(fieldName: string, crop: string, snapshot: FieldSnapshot): string {
   const label = crop ? `${crop} field "${fieldName}"` : `Field "${fieldName}"`;
-  return `${label} — ${snapshot.stressEvent.severity.toUpperCase()}: ${snapshot.stressEvent.message}`;
+  let summary = `${label} — ${snapshot.stressEvent.severity.toUpperCase()}: ${snapshot.stressEvent.message}`;
+
+  const outlook = snapshot.seasonalOutlook;
+  if (outlook && (outlook.precipLean !== "near_normal" || outlook.tempLean !== "near_normal")) {
+    const parts: string[] = [];
+    if (outlook.precipLean !== "near_normal") {
+      parts.push(`${outlook.precipLean} than normal (${Math.round(outlook.precipConfidence * 100)}% of outlook members)`);
+    }
+    if (outlook.tempLean !== "near_normal") {
+      parts.push(`${outlook.tempLean} than normal (${Math.round(outlook.tempConfidence * 100)}% of outlook members)`);
+    }
+    summary += ` Seasonal outlook for the next ${outlook.windowDays} days: ${parts.join(", ")}.`;
+  }
+
+  return summary;
 }
