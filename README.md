@@ -1,5 +1,7 @@
 # Daiisi
 
+demo video: https://www.youtube.com/watch?v=bAyyz1AnYbM&feature=youtu.be
+
 An adaptive intelligence system that gives smallholder farmers satellite-grade advice about their own fields, in plain words, from nothing more than a web browser and a phone number.
 
 Smallholder farms are 84% of the world's farms, yet almost all agricultural technology is built for large industrial farms. Climate change makes their conditions harder to predict every year. DAIISI watches each field from space, keeps a **personal memory graph** of what happened on that farm, and uses it to say what to do this week and why.
