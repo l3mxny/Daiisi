@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import FieldNotes from "./FieldNotes";
 import NdviChart from "./NdviChart";
 import InterventionLogger from "./InterventionLogger";
 import AiRecommendation from "./AiRecommendation";
@@ -108,11 +109,13 @@ function PlotCard({
   data,
   recommendation,
   onRefresh,
+  fieldChoices,
 }: {
   plot: Plot;
   data: FieldApiResponse;
   recommendation: PlotRecommendation;
   onRefresh: () => void;
+  fieldChoices: Array<{ id: string; label: string }>;
 }) {
   const [pinned, setPinned] = useState(false);
   const severity = data.stressEvent.severity;
@@ -259,8 +262,14 @@ function PlotCard({
             </div>
           )}
 
+          <div className="mt-4">
+            <FieldNotes fieldId={plot.id} fieldLabel={plot.label} fieldChoices={fieldChoices} />
+          </div>
+
           <div className="mt-3 flex justify-center">
-            <span className="text-xs text-zinc-400">{plot.label} · {recommendation.areaHectares.toFixed(1)} ha</span>
+            <span className="text-xs text-zinc-400">
+              {plot.label} · {recommendation.areaHectares.toFixed(1)} ha
+            </span>
           </div>
         </div>
       )}
@@ -273,6 +282,7 @@ export default function ResultsPanel({ plots, onRefreshPlot }: { plots: Plot[]; 
   const pendingPlots = plots.filter((p) => p.status === "loading" && !p.data);
   const errorPlots = plots.filter((p) => p.status === "error" && !p.data);
   const ranked = rankPlots(plots);
+  const fieldChoices = plots.map((p) => ({ id: p.id, label: p.label })); // so a voice note can name a different field
 
   const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
@@ -297,7 +307,14 @@ export default function ResultsPanel({ plots, onRefreshPlot }: { plots: Plot[]; 
         ) : (
           <ul className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
             {ranked.map(({ plot, recommendation }) => (
-              <PlotCard key={plot.id} plot={plot} data={plot.data!} recommendation={recommendation} onRefresh={() => onRefreshPlot(plot.id)} />
+              <PlotCard
+                key={plot.id}
+                plot={plot}
+                data={plot.data!}
+                recommendation={recommendation}
+                onRefresh={() => onRefreshPlot(plot.id)}
+                fieldChoices={fieldChoices}
+              />
             ))}
           </ul>
         )}

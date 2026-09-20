@@ -1,5 +1,10 @@
 import FarmOSApp from "@/components/FarmOSApp";
+import LanguageProvider from "@/components/LanguageProvider";
 
 export default function Home() {
-  return <FarmOSApp />;
+  return (
+    <LanguageProvider>
+      <FarmOSApp />
+    </LanguageProvider>
+  );
 }

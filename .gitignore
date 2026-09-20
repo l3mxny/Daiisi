@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+
+# temporary voice-notes store (local demo data)
+/data/
 
 # vercel
 .vercel

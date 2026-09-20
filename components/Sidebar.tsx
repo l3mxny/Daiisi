@@ -1,12 +1,14 @@
 "use client";
 
+import LanguagePicker from "./LanguagePicker";
 import type { Plot } from "@/lib/types";
 
-export type TabId = "input" | "results";
+export type TabId = "input" | "results" | "text";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "input", label: "Field input" },
   { id: "results", label: "Results" },
+  { id: "text", label: "Farmer's text" },
 ];
 
 function TabIcon({ id }: { id: TabId }) {
@@ -17,9 +19,16 @@ function TabIcon({ id }: { id: TabId }) {
       </svg>
     );
   }
+  if (id === "results") {
+    return (
+      <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4">
+        <rect x="4" y="4" width="8" height="8" rx="1.2" transform="rotate(45 8 8)" />
+      </svg>
+    );
+  }
   return (
     <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.4">
-      <rect x="4" y="4" width="8" height="8" rx="1.2" transform="rotate(45 8 8)" />
+      <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -73,7 +82,8 @@ export default function Sidebar({
         </nav>
       </div>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
+        <LanguagePicker />
         <div className="rounded-2xl bg-white/5 px-3.5 py-3 text-xs">
           <div className="font-medium tracking-wide text-zinc-500 uppercase">Satellite</div>
           <div className="mt-1 text-zinc-300">{lastPassDate ? `Last pass ${lastPassDate}` : "No imagery yet"}</div>
