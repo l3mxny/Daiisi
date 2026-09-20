@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Bbox } from "@/lib/geo";
 import { bboxCentroid, bboxFromPoint } from "@/lib/geo";
-import { computeFieldSnapshot } from "@/lib/fieldSnapshot";
+import { getCachedSnapshot } from "@/lib/snapshotCache";
 import { getFieldById } from "@/db/fields";
 import { recordStressEvent } from "@/db/stressEvents";
 import { evaluatePendingOutcome } from "@/db/outcomes";
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
 
   let snapshot;
   try {
-    snapshot = await computeFieldSnapshot(bbox, { withImages: true, asOf });
+    snapshot = await getCachedSnapshot(bbox, { withImages: true, asOf, fresh: body?.refresh === true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/field] weather request failed:", message);

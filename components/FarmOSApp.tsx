@@ -138,12 +138,12 @@ export default function FarmOSApp() {
     setFlyTo({ lat: loc.lat, lng: loc.lng, zoom: loc.zoom ?? 15 });
   }
 
-  async function fetchPlotStats(id: string, bbox: Bbox) {
+  async function fetchPlotStats(id: string, bbox: Bbox, refresh = false) {
     try {
       const res = await fetch("/api/field", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bbox, fieldId: id, asOf: getReplayDate() }),
+        body: JSON.stringify({ bbox, fieldId: id, asOf: getReplayDate(), refresh }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -253,7 +253,7 @@ export default function FarmOSApp() {
     const plot = plots.find((p) => p.id === id);
     if (!plot) return;
     setPlots((prev) => prev.map((p) => (p.id === id ? { ...p, status: "loading", error: null } : p)));
-    fetchPlotStats(id, plot.bbox);
+    fetchPlotStats(id, plot.bbox, true); // Refresh always asks for new data, not the saved copy
   }
 
   if (initializing) {

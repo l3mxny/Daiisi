@@ -66,57 +66,61 @@ export default function TextPreviewPanel({
   }
 
   return (
-    <div className="h-full overflow-y-auto p-8">
+    <div className="h-full overflow-y-auto bg-cream p-8 font-[family-name:var(--font-mono-ui)]">
       <header>
-        <h1 className="font-serif text-3xl text-zinc-900">Text alerts</h1>
-        <p className="mt-1 max-w-3xl text-sm text-zinc-500">
-          A simulation of the texts an upgraded Twilio account would send, built from the same analysis as the Results
-          tab. Nothing leaves this page and no SMS provider is connected.
+        <h1 className="font-[family-name:var(--font-display)] text-4xl leading-tight font-extrabold tracking-tight text-olive uppercase">
+          SMS updates
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-olive/80">
+          The text a farmer would get on their phone, built from the same analysis as My results. It is a simulation:
+          nothing leaves this page and no SMS service is connected.
         </p>
       </header>
 
       {tracked.length === 0 ? (
-        <div className="mt-6 rounded-lg border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500">
+        <div className="mt-6 border border-dashed border-olive/30 bg-white/60 p-8 text-center text-sm text-olive/70">
           {pending > 0
             ? "Loading your fields…"
-            : "No saved fields yet. Draw and save a field on the Field input tab to preview the text."}
+            : "No saved fields yet. Draw and save a field on My fields to preview the text."}
         </div>
       ) : (
-        <div className="mt-6 grid grid-cols-1 gap-8 xl:grid-cols-[23rem_1fr]">
-          <div className="flex flex-col gap-6">
-            <div>
-              <div className="mx-auto w-full max-w-xs rounded-[2.5rem] border-8 border-zinc-800 bg-zinc-100 p-4 shadow-lg">
-                <div className="mb-3 text-center text-xs font-medium text-zinc-500">FarmOS</div>
-                <div className="overflow-hidden rounded-2xl rounded-tl-sm bg-white text-sm leading-relaxed text-zinc-900 shadow-sm">
+        <>
+          {/* The message is the main thing: a large phone, with the send controls beside it */}
+          <div className="mt-8 grid grid-cols-1 items-start gap-10 lg:grid-cols-[26rem_minmax(0,1fr)]">
+            <div className="mx-auto w-full max-w-[26rem]">
+              <div className="rounded-[2.75rem] border-[10px] border-zinc-900 bg-zinc-100 px-5 pt-4 pb-6 shadow-2xl">
+                <div className="mx-auto mb-3 h-1.5 w-16 rounded-full bg-zinc-300" />
+                <div className="mb-4 text-center text-xs font-semibold tracking-wide text-zinc-500 uppercase">FarmOS</div>
+                <div className="overflow-hidden rounded-3xl rounded-tl-md bg-white text-[15px] leading-relaxed text-zinc-900 shadow-sm">
                   {photoUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={photoUrl} alt={`Satellite photo of ${topPlot?.label ?? "the field"}`} className="h-40 w-full object-cover" />
+                    <img src={photoUrl} alt={`Satellite photo of ${topPlot?.label ?? "the field"}`} className="h-48 w-full object-cover" />
                   )}
-                  <div translate="no" className="px-4 py-3 whitespace-pre-wrap">{digest.text}</div>
+                  <div translate="no" className="min-h-40 px-5 py-4 whitespace-pre-wrap">{digest.text}</div>
                 </div>
-                <div className="mt-2 px-1 text-[11px] text-zinc-400">Today&apos;s text, not sent</div>
+                <div className="mt-3 px-1 text-[11px] text-zinc-400">Today&apos;s text, not sent</div>
               </div>
 
-              <div className="mx-auto mt-4 max-w-xs">
-                <div className="flex justify-between text-xs text-zinc-500">
+              <div className="mt-5">
+                <div className="flex justify-between text-xs text-olive/70">
                   <span>
                     {digest.chars} characters · {digest.segments} {digest.segments === 1 ? "SMS segment" : "SMS segments"}
                   </span>
                   <span>{digest.perSegment} per segment</span>
                 </div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-zinc-200">
+                <div className="mt-1.5 h-2 overflow-hidden bg-olive/10">
                   <div
-                    className={`h-full rounded-full ${digest.chars > digest.perSegment ? "bg-amber-500" : "bg-green-600"}`}
+                    className={`h-full ${digest.chars > digest.perSegment ? "bg-amber-500" : "bg-olive"}`}
                     style={{ width: `${Math.min(100, Math.round((digest.chars / digest.perSegment) * 100))}%` }}
                   />
                 </div>
                 {digest.chars > digest.perSegment && (
-                  <p className="mt-1 text-xs text-amber-700">
+                  <p className="mt-1.5 text-xs text-amber-700">
                     Over {digest.perSegment} characters, so it splits into more than one text.
                   </p>
                 )}
                 {digest.encoding === "ucs2" && (
-                  <p className="mt-1 text-xs text-zinc-500">
+                  <p className="mt-1.5 text-xs text-olive/70">
                     This language needs a different text encoding, so each text holds only 70 characters and long
                     messages split sooner.
                   </p>
@@ -124,94 +128,99 @@ export default function TextPreviewPanel({
               </div>
             </div>
 
-            <div className="rounded-xl border border-zinc-200 bg-white p-4">
-              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Simulate sending</div>
-              <label className="mt-3 block text-sm text-zinc-600" htmlFor="farmer-phone">
-                Farmer&apos;s phone number
-              </label>
-              <input
-                id="farmer-phone"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value.trim());
-                  setNotice(null);
-                }}
-                placeholder="+254712345678"
-                inputMode="tel"
-                className={`mt-1 w-full rounded-md border px-3 py-2 text-sm outline-none focus:ring-1 ${
-                  phoneProblem ? "border-red-400 focus:ring-red-400" : "border-zinc-300 focus:ring-green-600"
-                }`}
-              />
-              {phoneProblem && (
-                <p className="mt-1 text-xs text-red-600">
-                  Start with + and the country code, then digits only (like +254712345678, not 0712345678).
-                </p>
-              )}
-              <label className={`mt-3 flex items-start gap-2 text-xs ${topPhoto ? "text-zinc-600" : "text-zinc-400"}`}>
+            <div className="flex flex-col gap-6">
+              <div className="border border-zinc-200 bg-white p-5 shadow-sm">
+                <h2 className="inline-block border-b border-olive pb-1 font-[family-name:var(--font-display)] text-sm font-bold tracking-wide text-olive uppercase">
+                  Send it
+                </h2>
+                <label className="mt-4 block text-xs text-olive" htmlFor="farmer-phone">
+                  Farmer&apos;s phone number
+                </label>
                 <input
-                  type="checkbox"
-                  checked={attachPhoto && topPhoto !== null}
-                  disabled={topPhoto === null}
-                  onChange={(e) => setAttachPhoto(e.target.checked)}
-                  className="mt-0.5"
+                  id="farmer-phone"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(e.target.value.trim());
+                    setNotice(null);
+                  }}
+                  placeholder="+254712345678"
+                  inputMode="tel"
+                  className={`mt-1.5 w-full border bg-zinc-100/70 px-3 py-2 text-xs text-olive outline-none focus:border-olive ${
+                    phoneProblem ? "border-red-400" : "border-zinc-200"
+                  }`}
                 />
-                <span>
-                  Attach the satellite photo (MMS)
-                  <span className="block text-zinc-400">
-                    MMS is mainly available for US and Canadian numbers; elsewhere the farmer would get text only.
+                {phoneProblem && (
+                  <p className="mt-1 text-xs text-red-600">
+                    Start with + and the country code, then digits only (like +254712345678, not 0712345678).
+                  </p>
+                )}
+                <label className={`mt-4 flex items-start gap-2 text-xs ${topPhoto ? "text-olive" : "text-zinc-400"}`}>
+                  <input
+                    type="checkbox"
+                    checked={attachPhoto && topPhoto !== null}
+                    disabled={topPhoto === null}
+                    onChange={(e) => setAttachPhoto(e.target.checked)}
+                    className="mt-0.5 accent-olive"
+                  />
+                  <span>
+                    Attach the satellite photo (MMS)
+                    <span className="block text-zinc-400">
+                      MMS is mainly available for US and Canadian numbers; elsewhere the farmer would get text only.
+                    </span>
                   </span>
-                </span>
-              </label>
-              <button
-                onClick={handleSend}
-                disabled={!phoneOk}
-                className="mt-3 w-full rounded-full bg-green-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Send (simulated)
-              </button>
-              {notice && (
-                <p className={`mt-2 text-xs ${notice.send ? "text-green-700" : "text-amber-700"}`}>
-                  {notice.send ? `Sent: ${notice.reason}` : notice.reason}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
-                Outbox (simulated){outbox.length > 0 ? ` · ${outbox.length}` : ""}
+                </label>
+                <button
+                  onClick={handleSend}
+                  disabled={!phoneOk}
+                  className="mt-5 w-full bg-olive px-4 py-3 text-xs font-semibold tracking-wide text-white uppercase transition-colors hover:bg-olive-soft disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Send (simulated)
+                </button>
+                {notice && (
+                  <p className={`mt-2 text-xs ${notice.send ? "text-green-700" : "text-amber-700"}`}>
+                    {notice.send ? `Sent: ${notice.reason}` : notice.reason}
+                  </p>
+                )}
               </div>
-              {outbox.length === 0 ? (
-                <p className="mt-2 text-sm text-zinc-500">No texts yet. Enter a number and press Send.</p>
-              ) : (
-                <ul className="mt-2 flex flex-col gap-2">
-                  {outbox.map((m) => (
-                    <li key={m.id} className="rounded-lg border border-zinc-200 bg-white p-3">
-                      <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
-                        <span className="truncate">
-                          To {m.to} · {formatTime(m.createdAt)}
-                        </span>
-                        <span className={`shrink-0 rounded px-2 py-0.5 font-semibold ${STATUS_STYLE[m.status]}`}>
-                          {m.status}
-                        </span>
-                      </div>
-                      {m.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={m.imageUrl} alt="Attached satellite photo" className="mt-2 h-28 w-full rounded-md object-cover" />
-                      )}
-                      <pre translate="no" className="mt-2 font-sans text-sm whitespace-pre-wrap text-zinc-900">{m.body}</pre>
-                      <div className="mt-2 text-[11px] text-zinc-400">
-                        {m.chars} chars · {m.segments} {m.segments === 1 ? "segment" : "segments"}
-                        {m.imageUrl ? " · with photo (MMS)" : ""} · {m.id}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+
+              <div>
+                <h2 className="text-xs font-semibold tracking-wide text-olive/70 uppercase">
+                  Outbox (simulated){outbox.length > 0 ? ` · ${outbox.length}` : ""}
+                </h2>
+                {outbox.length === 0 ? (
+                  <p className="mt-2 text-sm text-olive/60">No texts yet. Enter a number and press Send.</p>
+                ) : (
+                  <ul className="mt-2 flex flex-col gap-2">
+                    {outbox.map((m) => (
+                      <li key={m.id} className="border border-zinc-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                          <span className="truncate">
+                            To {m.to} · {formatTime(m.createdAt)}
+                          </span>
+                          <span className={`shrink-0 px-2 py-0.5 font-semibold ${STATUS_STYLE[m.status]}`}>{m.status}</span>
+                        </div>
+                        {m.imageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.imageUrl} alt="Attached satellite photo" className="mt-2 h-28 w-full object-cover" />
+                        )}
+                        <pre translate="no" className="mt-2 font-[family-name:var(--font-mono-ui)] text-xs whitespace-pre-wrap text-zinc-900">{m.body}</pre>
+                        <div className="mt-2 text-[11px] text-zinc-400">
+                          {m.chars} chars · {m.segments} {m.segments === 1 ? "segment" : "segments"}
+                          {m.imageUrl ? " · with photo (MMS)" : ""} · {m.id}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           </div>
 
-          <SatellitePanel plots={tracked} digest={digest} />
-        </div>
+          {/* The pictures behind the text, in equal columns under the message */}
+          <div className="mt-12 border-t border-olive/20 pt-8">
+            <SatellitePanel plots={tracked} digest={digest} />
+          </div>
+        </>
       )}
     </div>
   );
