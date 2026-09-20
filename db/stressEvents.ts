@@ -98,6 +98,71 @@ export async function getStressEventForWeek(fieldId: string, weekStart: string):
   return { id: rows[0].id, fieldId: rows[0].field_id, weekStart: rows[0].week_start, ndviMean: rows[0].ndvi_mean };
 }
 
+export interface StressEventDetail {
+  id: string;
+  fieldId: string;
+  fieldName: string;
+  crop: string;
+  weekStart: string;
+  severity: Severity;
+  waterRatio: number | null;
+  rain30: number | null;
+  et030: number | null;
+  forecastRain16: number | null;
+  heatDays7: number | null;
+  rain30Normal: number | null;
+  rainAnomalyRatio: number | null;
+  ndviMean: number | null;
+  ndviDelta: number | null;
+  ndviTrend: NdviTrend | null;
+  cloudCover: number | null;
+  daysSinceClear: number | null;
+  summary: string;
+  aiRecommendation: string | null;
+}
+
+export async function getStressEventDetail(id: string): Promise<StressEventDetail | null> {
+  const db = getDb();
+  const { rows } = await db.query(
+    `SELECT se.*, f.name AS field_name, f.crop
+     FROM stress_events se JOIN fields f ON f.id = se.field_id
+     WHERE se.id = $1`,
+    [id]
+  );
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    fieldId: r.field_id,
+    fieldName: r.field_name,
+    crop: r.crop,
+    weekStart: r.week_start,
+    severity: r.severity,
+    waterRatio: r.water_ratio,
+    rain30: r.rain_30,
+    et030: r.et0_30,
+    forecastRain16: r.forecast_rain_16,
+    heatDays7: r.heat_days_7,
+    rain30Normal: r.rain_30_normal,
+    rainAnomalyRatio: r.rain_anomaly_ratio,
+    ndviMean: r.ndvi_mean,
+    ndviDelta: r.ndvi_delta,
+    ndviTrend: r.ndvi_trend,
+    cloudCover: r.cloud_cover,
+    daysSinceClear: r.days_since_clear,
+    summary: r.summary,
+    aiRecommendation: r.ai_recommendation,
+  };
+}
+
+export async function setAiRecommendation(id: string, text: string): Promise<void> {
+  const db = getDb();
+  await db.query(
+    "UPDATE stress_events SET ai_recommendation = $1, ai_recommendation_generated_at = now() WHERE id = $2",
+    [text, id]
+  );
+}
+
 // Builds the summary + embedding and upserts in one call — used by both the
 // scheduled weekly job and a manual "refresh this field" fetch, so either
 // one landing keeps that week's row current.
