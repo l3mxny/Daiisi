@@ -1,13 +1,16 @@
 import { getStressEventDetail, setAiRecommendation, type StressEventDetail } from "@/db/stressEvents";
+import { listNotesForPrompt } from "@/db/fieldNotes";
 import { retrieveSimilarEvents, type EvidenceCandidate } from "../retrieval";
 import { generateText } from "./groq";
+import { NOTES_GUIDANCE, buildNotesSection } from "./notesPrompt";
 
 const SYSTEM_PROMPT = `You are an agronomy assistant for Daiisi, a satellite + weather monitoring tool for small farms.
-Given the current week's data for one field and a short history of similar past situations on that same field (with their eventual outcomes, when known), write a recommendation with:
+Given the current week's data for one field and a short history of similar past situations on that same field, write a SHORT recommendation for a busy farmer, in plain everyday words:
 1. One priority line stating urgency plainly (e.g. "High priority — irrigate within 2 days." or "No action needed right now.")
-2. A 2-4 sentence explanation citing the specific numbers you were given (water balance, rainfall vs. forecast/normal, NDVI trend, cloud cover / data freshness). Mention the seasonal outlook only when it reinforces or complicates the near-term picture — e.g. a dry week heading into a seasonal outlook that also leans drier is worth flagging; a near-normal outlook usually isn't worth a sentence.
-3. If, and only if, a past event is genuinely relevant, one sentence referencing what happened last time.
-Be concise and concrete. Never invent a number you weren't given. If data is missing or a satellite scene is stale, say so plainly rather than guessing around it.`;
+2. At most 2 short sentences saying why, using only the one or two numbers that matter most. No jargon, no lists, no restating every signal. Mention the seasonal outlook or a past event only if it changes what the farmer should do.
+Keep the whole answer under 50 words. Never invent a number you weren't given. If data is missing or a satellite scene is stale, say so in a few words.
+
+${NOTES_GUIDANCE}`;
 
 function formatEvidence(evidence: EvidenceCandidate[]): string {
   if (evidence.length === 0) return "No comparable past events recorded yet for this field.";
@@ -42,6 +45,11 @@ export async function generateAiRecommendation(stressEventId: string): Promise<s
   if (event.aiRecommendation) return event.aiRecommendation;
 
   const evidence = await retrieveSimilarEvents(stressEventId, 3);
+  // The farmer's own voice notes for this field. Extra context only, so a problem reading them must never
+  // stop the recommendation. Saving or deleting a note clears this row's cached text (db/fieldNotes.ts), so
+  // the next request lands here and regenerates with the change.
+  const notes = await listNotesForPrompt(event.fieldId).catch(() => []);
+  const notesSection = buildNotesSection(notes, new Date().toISOString().slice(0, 10));
 
   const userPrompt = `Field: "${event.fieldName}" (${event.crop || "crop not specified"})
 Week of: ${event.weekStart}
@@ -56,7 +64,7 @@ Current signals (each labeled with its own time window — do not mix them up):
 - DATA FRESHNESS: ${event.daysSinceClear !== null ? `last clear satellite scene was ${event.daysSinceClear} days ago (cloud cover ${event.cloudCover ?? "?"}%)` : "no clear scene in the last 60 days"}
 - SEASONAL OUTLOOK — ${formatSeasonalOutlook(event.seasonalOutlook)}
 
-Similar past events on this field:
+${notesSection}Similar past events on this field:
 ${formatEvidence(evidence)}
 
 Write the recommendation now.`;

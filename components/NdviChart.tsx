@@ -2,8 +2,24 @@
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { NdviPoint } from "@/lib/sentinelHub";
+import { getWeekStart } from "@/lib/week";
 
-export default function NdviChart({ data }: { data: NdviPoint[] }) {
+// One point per week (average of that week's readings, labelled by the week's Sunday). Display only: the
+// analysis still uses the raw series, and nothing a farmer logs (notes) feeds into this chart.
+function toWeekly(data: NdviPoint[]): NdviPoint[] {
+  const weeks = new Map<string, number[]>();
+  for (const p of data) {
+    const week = getWeekStart(new Date(`${p.date.slice(0, 10)}T00:00:00Z`));
+    weeks.set(week, [...(weeks.get(week) ?? []), p.mean]);
+  }
+  return [...weeks.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, means]) => ({ ...p0(date), mean: means.reduce((a, b) => a + b, 0) / means.length }));
+}
+const p0 = (date: string) => ({ date }) as NdviPoint;
+
+export default function NdviChart({ data: daily }: { data: NdviPoint[] }) {
+  const data = toWeekly(daily);
   if (data.length === 0) {
     return <p className="text-sm text-zinc-500">No NDVI data available for this period.</p>;
   }
@@ -15,7 +31,7 @@ export default function NdviChart({ data }: { data: NdviPoint[] }) {
         <XAxis
           dataKey="date"
           tick={{ fontSize: 10 }}
-          tickFormatter={(d: string) => d.slice(5)}
+          tickFormatter={(d: string) => `wk ${d.slice(5)}`}
           minTickGap={20}
         />
         <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} width={36} />

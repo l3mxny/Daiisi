@@ -5,11 +5,11 @@ import FieldNotes from "./FieldNotes";
 import NdviChart from "./NdviChart";
 import InterventionLogger from "./InterventionLogger";
 import AiRecommendation from "./AiRecommendation";
-import { useAiRecommendation, firstLine } from "@/lib/ai/useAiRecommendation";
+import PlotComparison from "./PlotComparison";
+import { useAiRecommendation } from "@/lib/ai/useAiRecommendation";
 import type { FieldApiResponse, Plot } from "@/lib/types";
 import type { Severity } from "@/lib/stressEvent";
-import type { SeasonalOutlook } from "@/lib/seasonalOutlook";
-import { buildChangeSinceLastCheck, buildPlotRecommendation, type PlotRecommendation } from "@/lib/recommendations";
+import { buildPlotRecommendation, type PlotRecommendation } from "@/lib/recommendations";
 
 const SEVERITY_DOT: Record<Severity, string> = {
   ok: "bg-green-400",
@@ -29,33 +29,16 @@ function badgeText(severity: Severity): string {
   return "All good";
 }
 
-function cardTitle(severity: Severity, actions: string[]): string {
-  if (severity === "ok") return "Nothing to do";
-  if (severity === "act") {
-    return actions.some((a) => /irrigat|water/i.test(a)) ? "Water this field" : "Act on this field";
-  }
-  return "Walk this field and check it";
-}
-
-function describeSeasonalOutlook(outlook: SeasonalOutlook | null): string | null {
-  if (!outlook || (outlook.precipLean === "near_normal" && outlook.tempLean === "near_normal")) return null;
-  const parts: string[] = [];
-  if (outlook.precipLean !== "near_normal") {
-    parts.push(`${outlook.precipLean} than normal rainfall (${Math.round(outlook.precipConfidence * 100)}% confidence)`);
-  }
-  if (outlook.tempLean !== "near_normal") {
-    parts.push(`${outlook.tempLean} than normal temperatures (${Math.round(outlook.tempConfidence * 100)}% confidence)`);
-  }
-  return `Next ${outlook.windowDays} days: ${parts.join(", ")}.`;
-}
-
 // Includes plots currently re-fetching (status "loading" but still holding
 // their last-known-good data) so a refresh doesn't yank the card out from
 // under the farmer mid-read — only plots with no data yet drop out.
 function rankPlots(plots: Plot[]): Array<{ plot: Plot; recommendation: PlotRecommendation }> {
   return plots
     .filter((p) => p.data !== null)
-    .map((plot) => ({ plot, recommendation: buildPlotRecommendation(plot.data!) }))
+    .map((plot) => ({
+      plot,
+      recommendation: buildPlotRecommendation(plot.data!),
+    }))
     .sort((a, b) => b.recommendation.priorityScore - a.recommendation.priorityScore);
 }
 
@@ -95,15 +78,6 @@ function StatPill({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlotThumbnail({ plot }: { plot: Plot }) {
-  const image = plot.data?.observation.trueColorImage;
-  if (image) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={image} alt={`${plot.label} satellite view`} className="h-full w-full object-cover" />;
-  }
-  return <div className="h-full w-full" style={{ backgroundColor: plot.color, opacity: 0.5 }} />;
-}
-
 function PlotCard({
   plot,
   data,
@@ -118,11 +92,10 @@ function PlotCard({
   fieldChoices: Array<{ id: string; label: string }>;
 }) {
   const [pinned, setPinned] = useState(false);
+  const [notesVersion, setNotesVersion] = useState(0); // bumped when a voice note is saved or deleted
   const severity = data.stressEvent.severity;
-  const seasonalNote = describeSeasonalOutlook(data.seasonalOutlook);
-  const ai = useAiRecommendation(data.stressEventId);
+  const ai = useAiRecommendation(data.stressEventId, notesVersion);
 
-  const headline = ai.recommendation ? firstLine(ai.recommendation) : cardTitle(severity, recommendation.actions);
   const open = pinned; // CSS handles the hover-only preview; this forces it open once clicked
 
   return (
@@ -135,7 +108,6 @@ function PlotCard({
         <span className={`mt-2 h-2 w-2 shrink-0 rounded-full ${SEVERITY_DOT[severity]}`} />
         <div className="min-w-0 flex-1">
           <div className="truncate font-serif text-lg text-zinc-900">{plot.details.name || plot.label}</div>
-          <div className="truncate text-sm text-zinc-500">{headline}</div>
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${SEVERITY_BADGE[severity]}`}>
           {badgeText(severity)}
@@ -152,9 +124,6 @@ function PlotCard({
       >
         <div className="overflow-hidden">
           <div className="flex flex-col gap-2 border-t border-zinc-100 pt-3">
-            <p className="text-sm text-zinc-600">
-              {ai.loading ? "Thinking it through…" : ai.recommendation || data.stressEvent.message}
-            </p>
             <div className="flex flex-wrap gap-1.5">
               <StatPill label="soil water" value={`${Math.round(data.weather.waterRatio * 100)}%`} />
               <StatPill label="rain in 16d" value={`${Math.round(data.weather.forecastRain16)}mm`} />
@@ -204,66 +173,53 @@ function PlotCard({
             </div>
           )}
 
-          <div className="h-40 w-full overflow-hidden rounded-2xl bg-zinc-100">
-            <PlotThumbnail plot={plot} />
-          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <div className="min-w-0">
+              <div>
+                <AiRecommendation
+                  loading={ai.loading}
+                  error={ai.error}
+                  recommendation={ai.recommendation}
+                  evidence={ai.evidence}
+                />
+              </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">What the satellite sees</div>
-              <p className="mt-1 text-sm text-zinc-700">{recommendation.satelliteOutlook}</p>
-            </div>
-            <div>
-              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Why it is happening</div>
-              <p className="mt-1 text-sm text-zinc-700">{data.stressEvent.message}</p>
-            </div>
-            <div>
-              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Last time</div>
-              <p className="mt-1 text-sm text-zinc-700">
-                {plot.previousData ? buildChangeSinceLastCheck(plot.previousData, data) : "No previous check yet this session."}
-              </p>
-            </div>
-          </div>
-
-          {seasonalNote && (
-            <p className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-xs text-amber-900">{seasonalNote}</p>
-          )}
-
-          <div className="mt-4">
-            <AiRecommendation
-              loading={ai.loading}
-              error={ai.error}
-              recommendation={ai.recommendation}
-              evidence={ai.evidence}
-            />
-          </div>
-
-          <div className="mt-4">
-            <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Recommended action</div>
-            <ul className="mt-1.5 flex flex-col gap-1.5">
-              {recommendation.actions.map((action, i) => (
-                <li key={i} className="rounded-2xl border border-blue-100 bg-blue-50 p-2.5 text-sm text-blue-900">
-                  {action}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="mt-4">
-            <InterventionLogger stressEventId={data.stressEventId} />
-          </div>
-
-          {data.observation.timeseries.length > 0 && (
-            <div className="mt-4">
-              <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">NDVI — last 90 days</div>
-              <div className="mt-1 rounded-2xl border border-zinc-200 bg-white p-2">
-                <NdviChart data={data.observation.timeseries} />
+              <div className="mt-4">
+                <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">Recommended action</div>
+                <ul className="mt-1.5 flex flex-col gap-1.5">
+                  {recommendation.actions.map((action, i) => (
+                    <li key={i} className="rounded-2xl border border-blue-100 bg-blue-50 p-2.5 text-sm text-blue-900">
+                      {action}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
-          )}
+            <div className="min-w-0">
+              <div>
+                <InterventionLogger stressEventId={data.stressEventId} />
+              </div>
 
-          <div className="mt-4">
-            <FieldNotes fieldId={plot.id} fieldLabel={plot.label} fieldChoices={fieldChoices} />
+              {data.observation.timeseries.length > 0 && (
+                <div className="mt-4">
+                  <div className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+                    NDVI — week by week, last 90 days
+                  </div>
+                  <div className="mt-1 rounded-2xl border border-zinc-200 bg-white p-2">
+                    <NdviChart data={data.observation.timeseries} />
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4">
+                <FieldNotes
+                  fieldId={plot.id}
+                  fieldLabel={plot.label}
+                  fieldChoices={fieldChoices}
+                  onNotesChanged={() => setNotesVersion((v) => v + 1)}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="mt-3 flex justify-center">
@@ -284,7 +240,11 @@ export default function ResultsPanel({ plots, onRefreshPlot }: { plots: Plot[]; 
   const ranked = rankPlots(plots);
   const fieldChoices = plots.map((p) => ({ id: p.id, label: p.label })); // so a voice note can name a different field
 
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
   return (
     <div className="h-full overflow-y-auto bg-[#f7f3ea] p-8">
@@ -300,12 +260,16 @@ export default function ResultsPanel({ plots, onRefreshPlot }: { plots: Plot[]; 
       </div>
 
       <div className="mt-6">
+        <PlotComparison plots={ranked.map(({ plot, recommendation }) => ({ plot, priority: recommendation.priorityScore }))} />
+      </div>
+
+      <div className="mt-6">
         {plots.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-500">
             No plots yet. Draw a bounding box on the Field input tab to start tracking a field.
           </div>
         ) : (
-          <ul className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <ul className="flex flex-col gap-4">
             {ranked.map(({ plot, recommendation }) => (
               <PlotCard
                 key={plot.id}

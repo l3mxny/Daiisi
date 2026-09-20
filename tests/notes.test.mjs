@@ -232,9 +232,9 @@ describe("temporary JSON notes store", () => {
       const store = new JsonFileNoteStore(file);
       const a = await store.add(note({ detail: "misheard" }));
       const b = await store.add(note({ detail: "correct" }));
-      assert.equal(await store.remove(a.id), true);
+      assert.equal((await store.remove(a.id)).id, a.id, "delete hands back the note it removed");
       assert.deepEqual((await store.notesFor("north", 30, NOW)).map((n) => n.detail), ["correct"]);
-      assert.equal(await store.remove(a.id), false, "deleting again finds nothing");
+      assert.equal(await store.remove(a.id), null, "deleting again finds nothing");
       assert.equal((await store.notesFor("north", 30, NOW))[0].id, b.id);
     });
   });

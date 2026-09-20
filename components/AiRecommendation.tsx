@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { EvidenceCandidate } from "@/lib/retrieval";
+import SpeakButton from "./SpeakButton";
 
 const VERDICT_LABEL: Record<string, string> = {
   improved: "Improved after this",
@@ -50,9 +51,12 @@ export default function AiRecommendation({
 }) {
   return (
     <div className="rounded-2xl border border-green-100 bg-green-50/50 p-4">
-      <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wide text-green-800 uppercase">
-        <SparkleIcon />
-        AI take
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-green-800 uppercase">
+          <SparkleIcon />
+          AI take
+        </div>
+        {recommendation && <SpeakButton text={recommendation} />}
       </div>
 
       {loading && <p className="text-sm text-zinc-500">Thinking it through…</p>}
@@ -69,10 +73,10 @@ export default function AiRecommendation({
       )}
 
       {evidence.length > 0 && (
-        <div className="mt-3 border-t border-green-200 pt-3">
-          <div className="mb-1.5 text-xs font-semibold tracking-wide text-green-800/70 uppercase">
+        <details className="mt-3 border-t border-green-200 pt-3">
+          <summary className="mb-1.5 cursor-pointer text-xs font-semibold tracking-wide text-green-800/70 uppercase">
             Based on {evidence.length} similar past situation{evidence.length === 1 ? "" : "s"}
-          </div>
+          </summary>
           <ul className="flex flex-col gap-1">
             {evidence.map((e) => (
               <li key={e.id} className="text-xs text-zinc-600">
@@ -85,7 +89,7 @@ export default function AiRecommendation({
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       )}
     </div>
   );

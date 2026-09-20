@@ -11,7 +11,7 @@ function formatDate(iso: string): string {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default function SavedNotes({ fieldId, refreshKey }: { fieldId: string; refreshKey: number }) {
+export default function SavedNotes({ fieldId, refreshKey, onDeleted }: { fieldId: string; refreshKey: number; onDeleted?: () => void }) {
   const [notes, setNotes] = useState<StoredNote[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +42,7 @@ export default function SavedNotes({ fieldId, refreshKey }: { fieldId: string; r
       if (!res.ok && res.status !== 404) throw new Error("Couldn't delete that note. Try again.");
       setNotes((current) => (current ? current.filter((n) => n.id !== id) : current));
       setError(null);
+      onDeleted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't delete that note.");
     }
