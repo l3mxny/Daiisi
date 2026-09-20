@@ -70,11 +70,13 @@ Using the app needs internet today. The plan is that a farmer needs it only once
 | App | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS |
 | Map and charts | Leaflet with Geoman, Recharts |
 | Satellite | Copernicus Data Space / Sentinel Hub (Sentinel-2 L2A) |
-| Weather and climate | Open-Meteo (forecast, archive, ECMWF SEAS5 seasonal) |
+| Weather and climate | Open-Meteo (forecast, historical archive, ECMWF SEAS5 seasonal) |
+| Location search | OpenStreetMap Nominatim (forward and reverse geocoding) |
 | Voice | Deepgram Nova-3 (speech to text) and Aura (text to speech) |
 | AI | Groq for note interpretation and recommendations; MiniLM embeddings run locally |
 | Memory graph | Postgres on Neon with pgvector |
 | Translation | Google Cloud Translation |
+| Hosting | Vercel (deployment and weekly cron); Neon Postgres |
 
 ## Run it locally
 
