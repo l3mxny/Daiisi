@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { DeepgramError, transcribeAudio } from "@/lib/deepgram";
 
+// Satellite, weather and AI calls can be slow on a cold start; Vercel cuts a function off at this many seconds.
+export const maxDuration = 60;
+
 // POST /api/note: a voice note for one field. Multipart form data with
 //   audio   - the recording (or an uploaded audio file)
 //   fieldId - the field whose panel the farmer opened; the default target of the note

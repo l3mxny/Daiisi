@@ -6,8 +6,8 @@ import { DATE_RE, isEventType } from "@/lib/noteTypes";
 //   POST   /api/notes                    save a note the farmer has reviewed and confirmed
 //   GET    /api/notes?fieldId=&days=     a field's notes, most recent first (default: last 90 days)
 //   DELETE /api/notes?id=                delete a note
-// Storage is the temporary JSON file for now (see lib/notesStore.ts); only getNoteStore() changes when the
-// database replaces it. Like the rest of the app, these routes have no sign-in yet.
+// Notes live in Postgres whenever DATABASE_URL is set (a local JSON file is only a fallback for development, and is
+// refused on Vercel; see lib/notesStore.ts). Like the rest of the app, these routes have no sign-in yet.
 
 const MAX_TEXT_CHARS = 2_000;
 const MAX_ID_CHARS = 200;

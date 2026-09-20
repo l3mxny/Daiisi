@@ -8,6 +8,9 @@ import { evaluatePendingOutcome } from "@/db/outcomes";
 import { getWeekStart } from "@/lib/week";
 import type { FieldApiResponse } from "@/lib/types";
 
+// Satellite, weather and AI calls can be slow on a cold start; Vercel cuts a function off at this many seconds.
+export const maxDuration = 60;
+
 function isValidBbox(value: unknown): value is Bbox {
   return (
     Array.isArray(value) &&
