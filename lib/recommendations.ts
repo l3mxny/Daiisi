@@ -14,6 +14,7 @@ export interface PlotRecommendation {
   actions: string[];
   areaHectares: number;
   irrigationLiters: number | null; // estimated liters to close the 30-day water deficit; null when no deficit
+  irrigationMm: number | null; // the same deficit as depth of water (mm), which is how irrigation is specified
 }
 
 const SEVERITY_BASE_SCORE: Record<Severity, number> = { ok: 0, watch: 50, act: 100 };
@@ -47,7 +48,7 @@ function buildSatelliteOutlook(observation: ObservationResult, stressEvent: Stre
 
   switch (stressEvent.signature.ndviTrend) {
     case "declining":
-      return "NDVI (greenness) has been trending down over the last 90 days — if that continues, expect visible canopy stress in the next scene or two.";
+      return "NDVI (greenness) has been trending down over the last 90 days, which can be an early sign of crop stress.";
     case "improving":
       return "NDVI has been trending up over the last 90 days — the canopy is recovering or actively growing.";
     case "stable":
@@ -60,23 +61,35 @@ function buildSatelliteOutlook(observation: ObservationResult, stressEvent: Stre
 function buildActions(weather: WeatherMetrics, stressEvent: StressEvent): string[] {
   const sig = stressEvent.signature;
   const actions: string[] = [];
+  const deficitMm = Math.round(weather.et030 - weather.rain30);
+  const forecastMm = Math.round(weather.forecastRain16);
+  const covered = weather.forecastRain16 >= weather.et030 - weather.rain30;
 
-  if (sig.waterRatio < 0.4) {
-    actions.push(
-      weather.forecastRain16 < 10
-        ? "Irrigate soon — the 16-day forecast doesn't show enough rain to close the deficit on its own."
-        : `Hold off irrigating for now — ~${Math.round(weather.forecastRain16)}mm of rain is forecast in the next 16 days; recheck once it lands.`
-    );
-  } else if (sig.waterRatio < 0.75) {
-    actions.push("Monitor soil moisture; a light irrigation may be worth it if the dry stretch continues.");
-  }
+  // Every line below is gated on the FINAL verdict, so a plot the rules call OK is never told anything
+  // that reads as a warning (the dry-spell line used to print under "Hold off irrigating").
+  if (stressEvent.severity === "ok") {
+    if (sig.waterRatio < 0.75 && covered) {
+      actions.push(`Hold off irrigating for now — ${forecastMm}mm of rain is forecast in the next 16 days, more than the ${deficitMm}mm gap; recheck once it lands.`);
+    }
+  } else {
+    if (sig.waterRatio < 0.4) {
+      // "Hold off" is only true when the forecast actually covers the gap; a little rain does not.
+      actions.push(
+        covered
+          ? `Hold off irrigating for now — ${forecastMm}mm of rain is forecast in the next 16 days, more than the ${deficitMm}mm gap; recheck once it lands.`
+          : `Irrigate soon — only ${forecastMm}mm of rain is forecast in the next 16 days against a ${deficitMm}mm gap.`
+      );
+    } else if (sig.waterRatio < 0.75) {
+      actions.push("Monitor soil moisture; a light irrigation may be worth it if the dry stretch continues.");
+    }
 
-  if (sig.ndviTrend === "declining" && sig.waterRatio >= 0.75) {
-    actions.push("Water supply looks adequate, so the NDVI drop likely isn't water-driven — inspect in person for pests, disease, or a nutrient deficiency.");
-  }
+    if (sig.ndviTrend === "declining" && sig.waterRatio >= 0.75) {
+      actions.push("Water supply looks adequate, so the NDVI drop may not be water-driven — inspect in person for pests, disease, or a nutrient deficiency.");
+    }
 
-  if (sig.rainAnomalyRatio !== null && sig.rainAnomalyRatio < 0.5) {
-    actions.push("This dry spell is unusually severe for the season (well below the historical normal) — worth checking even if the absolute numbers seem borderline.");
+    if (sig.rainAnomalyRatio !== null && sig.rainAnomalyRatio < 0.5) {
+      actions.push("This dry spell is unusually severe for the season (well below the historical normal) — worth checking even if the absolute numbers seem borderline.");
+    }
   }
 
   if (sig.heatDays7 >= 3) {
@@ -101,6 +114,12 @@ function estimateIrrigationLiters(weather: WeatherMetrics, stressEvent: StressEv
   return Math.round(deficitMm * areaHectares * 10_000);
 }
 
+function estimateIrrigationMm(weather: WeatherMetrics, stressEvent: StressEvent): number | null {
+  if (stressEvent.signature.waterRatio >= 0.75) return null;
+  const deficitMm = weather.et030 - weather.rain30;
+  return deficitMm > 0 ? Math.round(deficitMm) : null;
+}
+
 export function buildPlotRecommendation(data: FieldApiResponse): PlotRecommendation {
   const areaHectares = bboxAreaHectares(data.field.bbox);
   return {
@@ -109,6 +128,7 @@ export function buildPlotRecommendation(data: FieldApiResponse): PlotRecommendat
     actions: buildActions(data.weather, data.stressEvent),
     areaHectares,
     irrigationLiters: estimateIrrigationLiters(data.weather, data.stressEvent, areaHectares),
+    irrigationMm: estimateIrrigationMm(data.weather, data.stressEvent),
   };
 }
 

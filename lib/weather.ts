@@ -73,10 +73,35 @@ export function parseWeatherMetrics(json: OpenMeteoResponse): WeatherMetrics {
   return { rain30, et030, waterRatio, forecastRain16, daysSinceRain, heatDays7, rain7 };
 }
 
+const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
+const DAY_MS = 86_400_000;
+
+// Replay of a past date: the same window (92 days before, 16 after) read from Open-Meteo's archive of what
+// really happened. The "forecast" for a replay is therefore what actually fell, which is hindsight, not a
+// prediction; the replay screen says so. The archive lags a few days, so the window must end before that.
+async function getReplayWeatherMetrics(lat: number, lng: number, asOf: Date): Promise<WeatherMetrics> {
+  const start = new Date(asOf.getTime() - PAST_DAYS * DAY_MS);
+  const end = new Date(asOf.getTime() + (FORECAST_DAYS - 1) * DAY_MS);
+  if (end.getTime() > Date.now() - 6 * DAY_MS) {
+    throw new Error("A replay date must be at least three weeks in the past.");
+  }
+  const url = new URL(ARCHIVE_URL);
+  url.searchParams.set("latitude", String(lat));
+  url.searchParams.set("longitude", String(lng));
+  url.searchParams.set("start_date", start.toISOString().slice(0, 10));
+  url.searchParams.set("end_date", end.toISOString().slice(0, 10));
+  url.searchParams.set("daily", "precipitation_sum,et0_fao_evapotranspiration,temperature_2m_max");
+  url.searchParams.set("timezone", "auto");
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Open-Meteo archive request failed: ${res.status} ${await res.text()}`);
+  return parseWeatherMetrics(await res.json());
+}
+
 // No API key, no auth. Throws on any failure — weather has no cloud
 // dependency and exists for every coordinate, so callers must treat a
 // failure here as a real error rather than falling back silently.
-export async function getWeatherMetrics(lat: number, lng: number): Promise<WeatherMetrics> {
+export async function getWeatherMetrics(lat: number, lng: number, asOf?: Date): Promise<WeatherMetrics> {
+  if (asOf) return getReplayWeatherMetrics(lat, lng, asOf);
   const url = new URL(OPEN_METEO_URL);
   url.searchParams.set("latitude", String(lat));
   url.searchParams.set("longitude", String(lng));

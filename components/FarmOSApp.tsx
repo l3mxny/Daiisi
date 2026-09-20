@@ -10,6 +10,7 @@ import type { MapMode } from "./MapModeControls";
 import type { FlyTarget } from "./FieldMap";
 import type { FieldDetailsPatch } from "./FieldSidebar";
 import { getCurrentLocation } from "@/lib/geoLocation";
+import { getReplayDate } from "@/lib/replay";
 import { getStoredPhone, setStoredPhone, clearStoredPhone } from "@/lib/phoneSession";
 import type { Bbox } from "@/lib/geo";
 import type { FieldApiResponse, FieldDetails, Plot, SoilType } from "@/lib/types";
@@ -142,7 +143,7 @@ export default function FarmOSApp() {
       const res = await fetch("/api/field", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bbox, fieldId: id }),
+        body: JSON.stringify({ bbox, fieldId: id, asOf: getReplayDate() }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -266,7 +267,12 @@ export default function FarmOSApp() {
   return (
     <div className="flex h-dvh w-screen overflow-hidden bg-[#f7f3ea]">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} plots={plots} phone={phone} onSwitchNumber={handleSwitchNumber} />
-      <main className="h-full min-h-0 min-w-0 flex-1 overflow-hidden">
+      <main className="relative h-full min-h-0 min-w-0 flex-1 overflow-hidden">
+        {getReplayDate() && (
+          <div className="absolute top-3 left-1/2 z-[2000] -translate-x-1/2 rounded-full bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-900 shadow">
+            Replay: conditions as of {getReplayDate()}. The &quot;forecast&quot; shows what really fell afterwards, and no AI take is made.
+          </div>
+        )}
         {activeTab === "input" && (
           <FieldInputPanel
             plots={plots}

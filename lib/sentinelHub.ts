@@ -74,9 +74,10 @@ export interface SceneInfo {
 export async function findLatestClearScene(
   bbox: Bbox,
   lookbackDays = 60,
-  maxCloudCover = 20
+  maxCloudCover = 20,
+  asOf?: Date // replay: look back from this date instead of now
 ): Promise<SceneInfo | null> {
-  const to = new Date();
+  const to = asOf ?? new Date();
   const from = new Date(to.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
 
   const res = await shFetch("/api/v1/catalog/1.0.0/search", {
@@ -171,14 +172,14 @@ interface StatsInterval {
 
 // Drops intervals where mean is "NaN" (fully clouded) or where more than
 // 30% of samples are no-data (partially masked mean is misleading).
-export async function getNdviTimeSeries(bbox: Bbox, lookbackDays = 90): Promise<NdviPoint[]> {
+export async function getNdviTimeSeries(bbox: Bbox, lookbackDays = 90, asOf?: Date): Promise<NdviPoint[]> {
   // aggregation.timeRange must land on UTC midnight boundaries. A "to" of
   // e.g. 02:14:37Z (whatever time the request happens to fire) instead of
   // 00:00:00Z shifts every P1D bucket by that offset and breaks the
   // backend's day bucketing for this aggregation — verified directly:
   // the same ~90-day window against the same bbox went from 19/22 valid
   // intervals (midnight-aligned) to 0/22 valid (misaligned by ~2h14m).
-  const to = new Date();
+  const to = new Date(asOf ?? Date.now());
   to.setUTCHours(0, 0, 0, 0);
   const from = new Date(to.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
 

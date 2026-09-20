@@ -37,9 +37,22 @@ export async function POST(req: NextRequest) {
 
   const [lat, lng] = bboxCentroid(bbox);
 
+  // Replay: show the field as it was on a past date (yyyy-mm-dd). Nothing is recorded for a replay.
+  let asOf: Date | undefined;
+  if (body && body.asOf !== undefined && body.asOf !== null) {
+    const parsed = typeof body.asOf === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.asOf) ? new Date(`${body.asOf}T00:00:00Z`) : null;
+    if (!parsed || Number.isNaN(parsed.getTime())) {
+      return NextResponse.json({ error: "asOf must be a date like 2023-09-01" }, { status: 400 });
+    }
+    if (parsed.getTime() > Date.now() - 22 * 86_400_000) {
+      return NextResponse.json({ error: "A replay date must be at least three weeks in the past." }, { status: 400 });
+    }
+    asOf = parsed;
+  }
+
   let snapshot;
   try {
-    snapshot = await computeFieldSnapshot(bbox, { withImages: true });
+    snapshot = await computeFieldSnapshot(bbox, { withImages: true, asOf });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[/api/field] weather request failed:", message);
@@ -51,7 +64,7 @@ export async function POST(req: NextRequest) {
   // best-effort: a failure here shouldn't block the farmer from seeing
   // their field's stats.
   let stressEventId: string | null = null;
-  if (typeof body?.fieldId === "string") {
+  if (!asOf && typeof body?.fieldId === "string") {
     try {
       const field = await getFieldById(body.fieldId);
       if (field) {

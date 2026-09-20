@@ -32,6 +32,11 @@ const NDVI_IMPROVE_THRESHOLD = 0.05;
 const DRY_ANOMALY_RATIO = 0.5;
 const WET_ANOMALY_RATIO = 1.5;
 
+// "Half the normal rain" only means something where rain is normally expected. In a dry season the normal
+// is a few mm or none, so the ratio is noise (0 of a 1 mm normal reads as "0% of normal", and a Central
+// Valley September is dry every year). Below this normal the comparison is dropped, not shown as a warning.
+export const MIN_NORMAL_RAIN_MM = 20;
+
 function clampLevel(index: number): Severity {
   return SEVERITY_LEVELS[Math.max(0, Math.min(SEVERITY_LEVELS.length - 1, index))];
 }
@@ -67,6 +72,11 @@ function classifySeverity(
   }
 
   if (ndviTrend === "declining") level += 1;
+  // The mirror image: a crop that is greening up is not stressed, and forecast rain that covers the whole
+  // 30-day deficit means waiting is a sound plan. Without these a field that is dry now but about to be
+  // soaked (and is growing) was still flagged urgent.
+  else if (ndviTrend === "improving") level -= 1;
+  if (weather.waterRatio < 0.75 && weather.forecastRain16 >= weather.et030 - weather.rain30) level -= 1;
 
   if (rainAnomalyRatio !== null) {
     if (rainAnomalyRatio < DRY_ANOMALY_RATIO) level += 1;
@@ -109,7 +119,7 @@ export function buildStressEvent(
 ): StressEvent {
   const ndviTrend = classifyNdviTrend(ndviDelta);
   const rainAnomalyRatio =
-    climateNormal && climateNormal.rain30Normal > 0 ? weather.rain30 / climateNormal.rain30Normal : null;
+    climateNormal && climateNormal.rain30Normal >= MIN_NORMAL_RAIN_MM ? weather.rain30 / climateNormal.rain30Normal : null;
   const severity = classifySeverity(weather, ndviTrend, rainAnomalyRatio);
 
   return {
